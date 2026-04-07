@@ -4,7 +4,7 @@ import { useGame } from '../context/GameContext';
 import { GameMode } from '@common/types';
 
 export default function JoinScreen() {
-  const { socket, connected } = useSocket();
+  const { socket, connected, serverUrl, setServerUrl } = useSocket();
   const { dispatch } = useGame();
   const [name, setName] = useState('');
   const [roomCode, setRoomCode] = useState('');
@@ -12,6 +12,7 @@ export default function JoinScreen() {
   const [view, setView] = useState<'home' | 'join' | 'create'>('home');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [serverInput, setServerInput] = useState('');
 
   // Check URL for room code
   useEffect(() => {
@@ -77,11 +78,45 @@ export default function JoinScreen() {
         <p className="text-white/60 mt-2">No chips? No problem.</p>
       </div>
 
-      {!connected && (
+      {!serverUrl && (
+        <div className="space-y-3 w-full max-w-xs mb-4 animate-fade-in">
+          <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+            <p className="text-sm text-white/70 text-center">
+              Enter the game server address to connect
+            </p>
+            <input
+              type="text"
+              placeholder="http://192.168.1.x:3000"
+              value={serverInput}
+              onChange={(e) => setServerInput(e.target.value)}
+              className="w-full py-3 px-4 bg-white/10 border border-white/20 rounded-xl
+                         text-white placeholder-white/40 text-center text-sm
+                         focus:outline-none focus:border-gold"
+            />
+            <button
+              onClick={() => {
+                if (serverInput.trim()) {
+                  setServerUrl(serverInput.trim().replace(/\/$/, ''));
+                }
+              }}
+              disabled={!serverInput.trim()}
+              className="w-full py-3 bg-gold text-black font-bold rounded-xl
+                         hover:bg-gold/90 active:scale-95 transition-all disabled:opacity-50"
+            >
+              Connect
+            </button>
+            <p className="text-xs text-white/40 text-center">
+              The host runs the server locally and shares the address
+            </p>
+          </div>
+        </div>
+      )}
+
+      {serverUrl && !connected && (
         <div className="text-yellow-400 mb-4 text-sm">Connecting to server...</div>
       )}
 
-      {view === 'home' && (
+      {view === 'home' && serverUrl && (
         <div className="space-y-3 w-full max-w-xs animate-fade-in">
           <button
             onClick={() => setView('create')}
