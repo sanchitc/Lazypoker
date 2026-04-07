@@ -27,8 +27,8 @@ function getServerUrl(): string | null {
     return window.location.origin;
   }
 
-  // On a hosted domain (e.g. vercel.app), no server available yet
-  return null;
+  // Server is co-located on the same origin (Railway full-stack deployment)
+  return window.location.origin;
 }
 
 export function SocketProvider({ children }: { children: React.ReactNode }) {
