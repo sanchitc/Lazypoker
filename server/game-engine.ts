@@ -23,6 +23,7 @@ export function createInitialState(roomCode: string, mode: GameMode): GameState 
     maxPlayers: DEFAULT_CONFIG.maxPlayers,
     lastAction: null,
     bettingRound: 0,
+    actedThisRound: [],
   };
 }
 
@@ -204,6 +205,7 @@ function resetBettingRound(state: GameState): GameState {
     ...state,
     currentBet: 0,
     minRaise: state.bigBlind,
+    actedThisRound: [],
     players: state.players.map(p => ({ ...p, currentBet: 0 })),
   };
 }
@@ -235,14 +237,14 @@ function isBettingRoundComplete(state: GameState): boolean {
   // If no one can act (everyone all-in or folded)
   if (canAct.length === 0) return true;
 
-  // All players who can act have matched the current bet
-  if (canAct.length === 1 && state.currentBet === 0) {
-    // One player can act and no bet to match - check if they've had a chance to act
-    const player = canAct[0];
-    if (player.currentBet === 0 && state.lastAction === null) return false; // hasn't acted yet
+  // When there is an active bet, everyone must have matched it
+  if (state.currentBet > 0) {
+    return canAct.every(p => p.currentBet === state.currentBet);
   }
 
-  return canAct.every(p => p.currentBet === state.currentBet);
+  // currentBet === 0 (check-around): round is complete only when every
+  // active player has had the opportunity to act this round
+  return canAct.every(p => state.actedThisRound.includes(p.id));
 }
 
 function calculateSidePots(state: GameState): Pot[] {
@@ -411,6 +413,7 @@ export function processAction(state: GameState, playerId: string, action: Player
       s.communityCards = [];
       s.lastAction = null;
       s.bettingRound = 0;
+      s.actedThisRound = [];
       for (const p of s.players) {
         p.currentBet = 0;
         p.totalBetThisHand = 0;
@@ -443,6 +446,7 @@ export function processAction(state: GameState, playerId: string, action: Player
         ...state,
         players: newPlayers,
         lastAction: { playerId, action: 'fold' },
+        actedThisRound: [...state.actedThisRound, playerId],
       };
 
       const remaining = getPlayersInHand(s);
@@ -464,6 +468,7 @@ export function processAction(state: GameState, playerId: string, action: Player
       let s: GameState = {
         ...state,
         lastAction: { playerId, action: 'check' },
+        actedThisRound: [...state.actedThisRound, playerId],
       };
 
       s.activePlayerIndex = getNextActivePlayerIndex(s, player.seatIndex);
@@ -496,6 +501,7 @@ export function processAction(state: GameState, playerId: string, action: Player
           i === 0 ? { ...pot, amount: pot.amount + callAmount } : pot
         ),
         lastAction: { playerId, action: 'call', amount: callAmount },
+        actedThisRound: [...state.actedThisRound, playerId],
       };
 
       s.activePlayerIndex = getNextActivePlayerIndex(s, player.seatIndex);
@@ -535,6 +541,7 @@ export function processAction(state: GameState, playerId: string, action: Player
           i === 0 ? { ...pot, amount: pot.amount + additional } : pot
         ),
         lastAction: { playerId, action: 'raise', amount: raiseTotal },
+        actedThisRound: [playerId], // reset — all others must re-act after a raise
       };
 
       s.activePlayerIndex = getNextActivePlayerIndex(s, player.seatIndex);
@@ -566,6 +573,7 @@ export function processAction(state: GameState, playerId: string, action: Player
           i === 0 ? { ...pot, amount: pot.amount + allInAmount } : pot
         ),
         lastAction: { playerId, action: 'all-in', amount: allInAmount },
+        actedThisRound: newBet > state.currentBet ? [playerId] : [...state.actedThisRound, playerId],
       };
 
       if (newBet > state.currentBet) {

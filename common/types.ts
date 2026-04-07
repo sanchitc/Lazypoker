@@ -61,6 +61,7 @@ export interface GameState {
   maxPlayers: number;
   lastAction: { playerId: string; action: string; amount?: number } | null;
   bettingRound: number; // 0-based, for chip-only mode tracking
+  actedThisRound: string[]; // player IDs who have acted in the current betting round
 }
 
 // ===== Actions =====
