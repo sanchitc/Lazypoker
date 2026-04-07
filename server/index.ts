@@ -24,7 +24,7 @@ const gameManager = new GameManager();
 setupSocketHandlers(io, gameManager);
 
 // Serve static client build in production
-const clientDist = path.join(__dirname, '..', 'dist', 'client');
+const clientDist = path.join(process.cwd(), 'dist', 'client');
 app.use(express.static(clientDist));
 app.get('*', (_req, res) => {
   res.sendFile(path.join(clientDist, 'index.html'));
