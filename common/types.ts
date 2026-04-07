@@ -22,6 +22,7 @@ export interface Player {
   isSittingOut: boolean;
   isConnected: boolean;
   isAdmin: boolean;
+  wantsToShowCards?: boolean;
 }
 
 // ===== Game =====
@@ -62,6 +63,7 @@ export interface GameState {
   lastAction: { playerId: string; action: string; amount?: number } | null;
   bettingRound: number; // 0-based, for chip-only mode tracking
   actedThisRound: string[]; // player IDs who have acted in the current betting round
+  turnTimer: number; // seconds per turn (0 = disabled)
 }
 
 // ===== Actions =====
@@ -79,7 +81,9 @@ export type PlayerAction =
   | { type: 'REMOVE_CHIPS'; playerId: string; amount: number }
   | { type: 'KICK_PLAYER'; playerId: string }
   | { type: 'SET_DEALER'; seatIndex: number }
-  | { type: 'END_GAME' };
+  | { type: 'END_GAME' }
+  | { type: 'SHOW_CARDS' }
+  | { type: 'LEAVE_GAME' };
 
 // ===== Socket Events =====
 export interface ServerToClientEvents {
@@ -103,6 +107,7 @@ export interface GameConfig {
   bigBlind?: number;
   startingChips?: number;
   maxPlayers?: number;
+  turnTimer?: number;
 }
 
 export interface GameSummary {

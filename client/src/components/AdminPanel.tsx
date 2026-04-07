@@ -33,8 +33,9 @@ export default function AdminPanel() {
   };
 
   const inHandPlayers = gameState.players.filter(p => !p.isFolded && p.seatIndex >= 0);
-  const isHandInProgress = ['PRE_FLOP', 'FLOP', 'TURN', 'RIVER', 'BETTING_ROUND'].includes(gameState.phase);
+  const isHandInProgress = ['PRE_FLOP', 'FLOP', 'TURN', 'RIVER'].includes(gameState.phase);
   const isHandComplete = gameState.phase === 'HAND_COMPLETE' || gameState.phase === 'WAITING';
+  const totalPot = gameState.pots.reduce((sum, p) => sum + p.amount, 0);
 
   return (
     <>
@@ -68,23 +69,14 @@ export default function AdminPanel() {
               </button>
             )}
 
-            {/* Chip-only mode controls */}
-            {gameState.mode === 'chip-only' && isHandInProgress && (
-              <>
-                <button
-                  onClick={() => sendAction({ type: 'NEXT_ROUND' })}
-                  className="w-full py-3 bg-blue-600 rounded-xl font-bold active:scale-95 transition-all"
-                >
-                  Next Betting Round
-                </button>
-
-                <button
-                  onClick={() => { setShowDeclareWinner(true); setSelectedWinners([]); }}
-                  className="w-full py-3 bg-gold text-black rounded-xl font-bold active:scale-95 transition-all"
-                >
-                  Declare Winner
-                </button>
-              </>
+            {/* Chip-only mode: Declare Winner (banker only) */}
+            {gameState.mode === 'chip-only' && (isHandInProgress || (isHandComplete && totalPot > 0)) && (
+              <button
+                onClick={() => { setShowDeclareWinner(true); setSelectedWinners([]); }}
+                className="w-full py-3 bg-gold text-black rounded-xl font-bold active:scale-95 transition-all"
+              >
+                Declare Winner
+              </button>
             )}
 
             {/* Declare winner modal */}

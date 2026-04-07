@@ -66,6 +66,19 @@ export function setupSocketHandlers(
     });
 
     socket.on('action', (data) => {
+      if (data.action.type === 'LEAVE_GAME') {
+        // Remove player from room and let them return to the home screen
+        const summary = gameManager.getGameSummary(data.roomCode);
+        gameManager.processAction(data.roomCode, data.playerId, data.action);
+        if (summary) {
+          // Send summary only to the leaving player so they see the results screen
+          socket.emit('game:ended', { summary });
+        }
+        socket.leave(data.roomCode);
+        broadcastState(data.roomCode);
+        return;
+      }
+
       const state = gameManager.processAction(data.roomCode, data.playerId, data.action);
       if (state) {
         broadcastState(data.roomCode);
@@ -75,6 +88,8 @@ export function setupSocketHandlers(
           const summary = gameManager.getGameSummary(data.roomCode);
           if (summary) {
             io.to(data.roomCode).emit('game:ended', { summary });
+            // Clean up room so stale sessions can't reconnect
+            gameManager.deleteRoom(data.roomCode);
           }
         }
       } else {

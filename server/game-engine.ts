@@ -24,6 +24,7 @@ export function createInitialState(roomCode: string, mode: GameMode): GameState 
     lastAction: null,
     bettingRound: 0,
     actedThisRound: [],
+    turnTimer: 0,
   };
 }
 
@@ -237,14 +238,46 @@ function isBettingRoundComplete(state: GameState): boolean {
   // If no one can act (everyone all-in or folded)
   if (canAct.length === 0) return true;
 
+  // Every active player must have had a chance to act this round.
+  // This ensures the BB gets their option on pre-flop even when all bets match.
+  if (!canAct.every(p => state.actedThisRound.includes(p.id))) return false;
+
   // When there is an active bet, everyone must have matched it
   if (state.currentBet > 0) {
     return canAct.every(p => p.currentBet === state.currentBet);
   }
 
-  // currentBet === 0 (check-around): round is complete only when every
-  // active player has had the opportunity to act this round
-  return canAct.every(p => state.actedThisRound.includes(p.id));
+  // currentBet === 0: all have acted (checked), round is complete
+  return true;
+}
+
+function returnUncalledBets(state: GameState): GameState {
+  const inHand = getPlayersInHand(state);
+  if (inHand.length < 2) return state;
+
+  // Find the two highest totalBetThisHand among players still in hand
+  const bets = inHand.map(p => p.totalBetThisHand).sort((a, b) => b - a);
+  const highest = bets[0];
+  const secondHighest = bets[1];
+
+  if (highest > secondHighest) {
+    const excess = highest - secondHighest;
+    const bettor = inHand.find(p => p.totalBetThisHand === highest);
+    if (bettor) {
+      return {
+        ...state,
+        players: state.players.map(p =>
+          p.id === bettor.id
+            ? { ...p, chips: p.chips + excess, totalBetThisHand: p.totalBetThisHand - excess }
+            : p
+        ),
+        pots: state.pots.map((pot, i) =>
+          i === 0 ? { ...pot, amount: Math.max(0, pot.amount - excess) } : pot
+        ),
+      };
+    }
+  }
+  return state;
 }
 
 function calculateSidePots(state: GameState): Pot[] {
@@ -355,11 +388,6 @@ function advancePhase(state: GameState): GameState {
   // Check if all remaining players are all-in (run out the board)
   const canAct = inHand.filter(p => !p.isAllIn);
 
-  if (state.mode === 'chip-only') {
-    return { ...state, phase: 'HAND_COMPLETE' };
-  }
-
-  // Full mode phase transitions
   const nextPhases: Record<string, Phase> = {
     'PRE_FLOP': 'FLOP',
     'FLOP': 'TURN',
@@ -375,6 +403,29 @@ function advancePhase(state: GameState): GameState {
   let newState = resetBettingRound(state);
   newState.phase = nextPhase;
 
+  if (state.mode === 'chip-only') {
+    // Chip-only: advance through standard phases without dealing cards
+    if (nextPhase === 'SHOWDOWN') {
+      // After river betting, go to HAND_COMPLETE for manual winner declaration
+      newState.phase = 'HAND_COMPLETE';
+      newState.activePlayerIndex = -1;
+      return newState;
+    }
+
+    // If all remaining players are all-in, skip straight to HAND_COMPLETE
+    if (canAct.length === 0) {
+      newState.phase = 'HAND_COMPLETE';
+      newState.activePlayerIndex = -1;
+      return newState;
+    }
+
+    // Pause for admin to start next street (physical cards need to be dealt)
+    newState.activePlayerIndex = -1;
+    newState.bettingRound++;
+    return newState;
+  }
+
+  // Full mode: deal community cards
   if (nextPhase === 'FLOP') {
     newState = dealCommunityCards(newState, 3);
   } else if (nextPhase === 'TURN' || nextPhase === 'RIVER') {
@@ -420,6 +471,7 @@ export function processAction(state: GameState, playerId: string, action: Player
         p.isFolded = false;
         p.isAllIn = false;
         p.holeCards = null;
+        p.wantsToShowCards = false;
       }
 
       s = rotateDealerButton(s);
@@ -427,12 +479,9 @@ export function processAction(state: GameState, playerId: string, action: Player
 
       if (s.mode === 'full') {
         s = dealHoleCards(s);
-        s.phase = 'PRE_FLOP';
-        s = setFirstToAct(s, true);
-      } else {
-        s.phase = 'BETTING_ROUND';
-        s = setFirstToAct(s, true);
       }
+      s.phase = 'PRE_FLOP';
+      s = setFirstToAct(s, true);
 
       return s;
     }
@@ -589,29 +638,63 @@ export function processAction(state: GameState, playerId: string, action: Player
     }
 
     case 'NEXT_ROUND': {
-      if (!player.isAdmin || state.mode !== 'chip-only') return state;
-      let s = resetBettingRound(state);
-      s.bettingRound++;
-      s = setFirstToAct(s, false);
+      if (state.mode !== 'chip-only') return state;
+      // Any player can advance the street when betting is paused
+      if (state.activePlayerIndex !== -1) return state;
+      const validStreets: Phase[] = ['FLOP', 'TURN', 'RIVER'];
+      if (!validStreets.includes(state.phase)) return state;
+
+      let s = { ...state };
+      s = setFirstToAct(s, false); // postflop action order (left of dealer)
       return s;
     }
 
     case 'DECLARE_WINNER': {
       if (!player.isAdmin) return state;
-      const totalPot = state.pots.reduce((sum, p) => sum + p.amount, 0);
       const winners = action.winnerIds;
       if (winners.length === 0) return state;
 
-      const share = Math.floor(totalPot / winners.length);
-      const remainder = totalPot - share * winners.length;
+      // Return uncalled bets before calculating side pots
+      let preState = returnUncalledBets(state);
 
-      const newPlayers = state.players.map((p, i) => {
-        const winnerIndex = winners.indexOf(p.id);
-        if (winnerIndex >= 0) {
-          return { ...p, chips: p.chips + share + (winnerIndex === 0 ? remainder : 0) };
+      // Calculate proper side pots based on all-in amounts
+      const pots = calculateSidePots(preState);
+      let newPlayers = preState.players.map(p => ({ ...p }));
+      let totalAwarded = 0;
+
+      for (const pot of pots) {
+        // Find selected winners who are eligible for this pot
+        const eligibleWinners = winners.filter(id => pot.eligiblePlayerIds.includes(id));
+
+        if (eligibleWinners.length > 0) {
+          const share = Math.floor(pot.amount / eligibleWinners.length);
+          const remainder = pot.amount - share * eligibleWinners.length;
+          for (let i = 0; i < eligibleWinners.length; i++) {
+            const idx = newPlayers.findIndex(p => p.id === eligibleWinners[i]);
+            if (idx >= 0) {
+              newPlayers[idx].chips += share + (i === 0 ? remainder : 0);
+            }
+          }
+          totalAwarded += pot.amount;
+        } else {
+          // No selected winner is eligible — award to all non-folded eligible players
+          const fallback = pot.eligiblePlayerIds.filter(id => {
+            const p = preState.players.find(pl => pl.id === id);
+            return p && !p.isFolded;
+          });
+          if (fallback.length > 0) {
+            const share = Math.floor(pot.amount / fallback.length);
+            const remainder = pot.amount - share * fallback.length;
+            for (let i = 0; i < fallback.length; i++) {
+              const idx = newPlayers.findIndex(p => p.id === fallback[i]);
+              if (idx >= 0) {
+                newPlayers[idx].chips += share + (i === 0 ? remainder : 0);
+              }
+            }
+            totalAwarded += pot.amount;
+          }
         }
-        return p;
-      });
+      }
 
       const winnerNames = winners.map(id => state.players.find(p => p.id === id)?.name || '?').join(', ');
 
@@ -620,7 +703,7 @@ export function processAction(state: GameState, playerId: string, action: Player
         players: newPlayers,
         pots: [{ amount: 0, eligiblePlayerIds: [] }],
         phase: 'HAND_COMPLETE',
-        lastAction: { playerId, action: `${winnerNames} wins ${totalPot}` },
+        lastAction: { playerId, action: `${winnerNames} wins ${totalAwarded}` },
       };
     }
 
@@ -663,6 +746,21 @@ export function processAction(state: GameState, playerId: string, action: Player
       return { ...state, phase: 'HAND_COMPLETE' };
     }
 
+    case 'SHOW_CARDS': {
+      // Toggle wantsToShowCards for this player (only meaningful at HAND_COMPLETE)
+      if (state.phase !== 'HAND_COMPLETE') return state;
+      return {
+        ...state,
+        players: state.players.map(p =>
+          p.id === playerId ? { ...p, wantsToShowCards: !p.wantsToShowCards } : p
+        ),
+      };
+    }
+
+    case 'LEAVE_GAME': {
+      return removePlayer(state, playerId);
+    }
+
     default:
       return state;
   }
@@ -674,7 +772,12 @@ export function filterStateForPlayer(state: GameState, playerId: string): GameSt
     ...state,
     players: state.players.map(p => ({
       ...p,
-      holeCards: p.id === playerId || (isShowdown && !p.isFolded) ? p.holeCards : null,
+      holeCards:
+        p.id === playerId ||
+        (isShowdown && !p.isFolded) ||
+        p.wantsToShowCards
+          ? p.holeCards
+          : null,
     })),
   };
 }

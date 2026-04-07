@@ -120,6 +120,7 @@ export class GameManager {
         }
       }
     }
+    if (config.turnTimer !== undefined) room.state.turnTimer = config.turnTimer;
 
     return room.state;
   }

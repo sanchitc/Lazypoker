@@ -42,9 +42,22 @@ export default function ActionBar() {
       ? gameState.players[gameState.activePlayerIndex]
       : null;
 
+    // Check if betting is paused between streets (chip-only mode)
+    const isBettingPaused = gameState.mode === 'chip-only'
+      && gameState.activePlayerIndex === -1
+      && ['FLOP', 'TURN', 'RIVER'].includes(gameState.phase);
+
+    const streetName = gameState.phase === 'FLOP' ? 'flop'
+      : gameState.phase === 'TURN' ? 'turn'
+      : gameState.phase === 'RIVER' ? 'river' : '';
+
     return (
       <div className="p-4 text-center">
-        {activePlayer ? (
+        {isBettingPaused ? (
+          <div className="text-yellow-300/70 text-sm">
+            Deal the {streetName} &mdash; waiting for host to start betting
+          </div>
+        ) : activePlayer ? (
           <div className="text-white/50 text-sm">
             Waiting for <span className="text-white font-medium">{activePlayer.name}</span>...
           </div>

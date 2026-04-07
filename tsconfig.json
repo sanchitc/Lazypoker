@@ -11,9 +11,8 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "baseUrl": ".",
     "paths": {
-      "@common/*": ["common/*"]
+      "@common/*": ["./common/*"]
     }
   },
   "include": ["client/src", "common"]

@@ -95,6 +95,21 @@ export default function LobbyScreen() {
           </div>
 
           <div className="flex items-center justify-between">
+            <span className="text-sm text-white/70">Turn Timer</span>
+            <select
+              value={gameState.turnTimer ?? 0}
+              onChange={(e) => handleConfigure('turnTimer', parseInt(e.target.value))}
+              className="bg-white/10 rounded px-2 py-1 text-sm"
+            >
+              <option value={0}>Off</option>
+              <option value={15}>15s</option>
+              <option value={30}>30s</option>
+              <option value={60}>60s</option>
+              <option value={90}>90s</option>
+            </select>
+          </div>
+
+          <div className="flex items-center justify-between">
             <span className="text-sm text-white/70">Blinds</span>
             <select
               value={`${gameState.smallBlind}/${gameState.bigBlind}`}
@@ -185,6 +200,17 @@ export default function LobbyScreen() {
           Waiting for host to start the game...
         </div>
       )}
+
+      <button
+        onClick={() => {
+          localStorage.removeItem('lazypoker_session');
+          socket?.emit('action', { roomCode, playerId, action: { type: 'LEAVE_GAME' } });
+        }}
+        className="mt-3 w-full py-2 text-red-400/70 text-sm border border-red-600/20 rounded-xl
+                   hover:text-red-300 hover:border-red-600/40 active:scale-95 transition-all"
+      >
+        Leave Game
+      </button>
     </div>
   );
 }

@@ -78,6 +78,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     };
 
     const handleGameEnded = (data: { summary: GameSummary }) => {
+      // Clear session immediately so stale reconnects don't re-join a deleted room
+      localStorage.removeItem('lazypoker_session');
       dispatch({ type: 'SET_SUMMARY', summary: data.summary });
     };
 
