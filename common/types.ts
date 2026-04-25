@@ -64,6 +64,7 @@ export interface GameState {
   bettingRound: number; // 0-based, for chip-only mode tracking
   actedThisRound: string[]; // player IDs who have acted in the current betting round
   turnTimer: number; // seconds per turn (0 = disabled)
+  allowPlayersAwardPot: boolean; // whether non-admin players can award the pot
 }
 
 // ===== Actions =====
@@ -108,6 +109,7 @@ export interface GameConfig {
   startingChips?: number;
   maxPlayers?: number;
   turnTimer?: number;
+  allowPlayersAwardPot?: boolean;
 }
 
 export interface GameSummary {

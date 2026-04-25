@@ -55,3 +55,117 @@ body {
 .pot-pulse {
   animation: potPulse 0.5s ease-in-out;
 }
+
+/* Chip add to pending animation */
+@keyframes chipAdd {
+  0% { transform: scale(0.6) translateY(8px); opacity: 0; }
+  60% { transform: scale(1.1) translateY(-2px); opacity: 1; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+.chip-add {
+  animation: chipAdd 0.2s ease-out;
+}
+
+/* Commit chips to pot */
+@keyframes commitToPot {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(-60px) scale(0.5); opacity: 0; }
+}
+.commit-to-pot {
+  animation: commitToPot 0.4s ease-in forwards;
+}
+
+/* Stack number smooth transition */
+.stack-number {
+  transition: all 0.3s ease-out;
+}
+
+/* Hide scrollbar for opponent band */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ===== Chip-Only Mode Revamp Animations ===== */
+
+/* Chip toss toward pot */
+@keyframes chipToss {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  40% { transform: translateY(-80px) scale(0.9) rotate(15deg); opacity: 1; }
+  100% { transform: translateY(-120px) scale(0.4) rotate(30deg); opacity: 0; }
+}
+.chip-toss {
+  animation: chipToss 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}
+
+/* Pot grow when chips land */
+@keyframes potGrow {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+.pot-grow {
+  animation: potGrow 0.4s ease-out;
+}
+
+/* Player acting ring pulse */
+@keyframes ringPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5); }
+  50% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+}
+.ring-pulse {
+  animation: ringPulse 1.5s ease-in-out infinite;
+}
+
+/* Slide in from bottom */
+@keyframes slideInUp {
+  0% { transform: translateY(100%); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+.slide-in-up {
+  animation: slideInUp 0.3s ease-out;
+}
+
+/* Scale pop for buttons */
+@keyframes scalePop {
+  0% { transform: scale(0.9); opacity: 0; }
+  70% { transform: scale(1.03); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.scale-pop {
+  animation: scalePop 0.25s ease-out;
+}
+
+/* Shimmer for award pot confirmation */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* Subtle breathing for waiting state */
+@keyframes breathe {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.8; }
+}
+.breathe {
+  animation: breathe 2s ease-in-out infinite;
+}
+
+/* Chip wobble on hover/touch */
+@keyframes chipWobble {
+  0% { transform: rotate(0deg); }
+  25% { transform: rotate(-3deg); }
+  75% { transform: rotate(3deg); }
+  100% { transform: rotate(0deg); }
+}
+.chip-wobble:active {
+  animation: chipWobble 0.15s ease-in-out;
+}

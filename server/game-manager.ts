@@ -121,6 +121,7 @@ export class GameManager {
       }
     }
     if (config.turnTimer !== undefined) room.state.turnTimer = config.turnTimer;
+    if (config.allowPlayersAwardPot !== undefined) room.state.allowPlayersAwardPot = config.allowPlayersAwardPot;
 
     return room.state;
   }

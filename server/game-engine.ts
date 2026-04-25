@@ -25,6 +25,7 @@ export function createInitialState(roomCode: string, mode: GameMode): GameState 
     bettingRound: 0,
     actedThisRound: [],
     turnTimer: 0,
+    allowPlayersAwardPot: false,
   };
 }
 
@@ -457,6 +458,12 @@ export function processAction(state: GameState, playerId: string, action: Player
       const active = getActivePlayers(state);
       if (active.length < 2) return state;
 
+      // Chip-only: block dealing if pot hasn't been awarded yet
+      if (state.mode === 'chip-only') {
+        const unawarded = state.pots.reduce((sum, p) => sum + p.amount, 0);
+        if (unawarded > 0) return state;
+      }
+
       let s = { ...state, players: state.players.map(p => ({ ...p })) };
 
       // Reset hand state
@@ -650,7 +657,7 @@ export function processAction(state: GameState, playerId: string, action: Player
     }
 
     case 'DECLARE_WINNER': {
-      if (!player.isAdmin) return state;
+      if (!player.isAdmin && !state.allowPlayersAwardPot) return state;
       const winners = action.winnerIds;
       if (winners.length === 0) return state;
 
