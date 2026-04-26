@@ -11,6 +11,7 @@ import ChipOnlyActionZone from '../components/ChipOnlyActionZone';
 import OpponentBand from '../components/OpponentBand';
 import ChipPotDisplay from '../components/ChipPotDisplay';
 import AwardPotButton from '../components/AwardPotButton';
+import HandRankings from '../components/HandRankings';
 import { useSocket } from '../context/SocketContext';
 import { CHIP_COLORS } from '@common/constants';
 
@@ -18,8 +19,8 @@ import { CHIP_COLORS } from '@common/constants';
 // Current player is always at bottom center
 function getSeatPositions(totalSeats: number, currentPlayerSeatIndex: number): { x: number; y: number }[] {
   const positions: { x: number; y: number }[] = [];
-  const cx = 50, cy = 42;
-  const rx = 42, ry = 34;
+  const cx = 50, cy = 50;
+  const rx = 38, ry = 28;
 
   for (let i = 0; i < totalSeats; i++) {
     const offset = currentPlayerSeatIndex >= 0 ? currentPlayerSeatIndex : 0;
@@ -280,7 +281,10 @@ function ChipOnlyLayout() {
         {/* Player identity */}
         <div className="flex items-center gap-2">
           <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold
-            ${isMyTurn ? 'bg-gold text-black ring-2 ring-gold/50 ring-pulse' : 'bg-white/15 text-white'}`}>
+            border shadow-md shadow-black/40
+            ${isMyTurn
+              ? 'bg-gold text-black border-gold ring-2 ring-gold/50 ring-pulse'
+              : 'bg-slate-800 text-white border-white/30'}`}>
             {currentPlayer.name[0].toUpperCase()}
           </div>
           <div className="flex flex-col leading-tight">
@@ -341,6 +345,8 @@ function ChipOnlyLayout() {
 
       {/* Admin panel */}
       <AdminPanel />
+
+      <HandRankings />
     </div>
   );
 }
@@ -400,7 +406,10 @@ function HandCompleteZone({
               >
                 <div className="flex items-center gap-2">
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold
-                    ${selectedWinners.includes(p.id) ? 'bg-gold text-black' : 'bg-white/15 text-white'}`}>
+                    border shadow-md shadow-black/40
+                    ${selectedWinners.includes(p.id)
+                      ? 'bg-gold text-black border-gold'
+                      : 'bg-slate-800 text-white border-white/30'}`}>
                     {p.name[0].toUpperCase()}
                   </div>
                   <span className="font-medium text-sm">{p.name}</span>
@@ -521,6 +530,17 @@ function FullModeLayout() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [isMyTurn, gameState?.activePlayerIndex, turnTimer, gameState?.phase]);
 
+  const [recentActorId, setRecentActorId] = useState<string | null>(null);
+  const lastActionKey = gameState?.lastAction
+    ? `${gameState.lastAction.playerId}|${gameState.lastAction.action}|${gameState.lastAction.amount ?? ''}`
+    : null;
+  useEffect(() => {
+    if (!gameState?.lastAction) { setRecentActorId(null); return; }
+    setRecentActorId(gameState.lastAction.playerId);
+    const t = setTimeout(() => setRecentActorId(null), 2500);
+    return () => clearTimeout(t);
+  }, [lastActionKey]);
+
   if (!gameState || !playerId || !roomCode || !currentPlayer) return null;
 
   const showCards = true;
@@ -568,7 +588,7 @@ function FullModeLayout() {
         {/* Green felt table */}
         <div className="absolute inset-4 rounded-[50%] bg-gradient-to-b from-felt-light to-felt
                         border-4 border-amber-900/60 shadow-inner"
-             style={{ top: '5%', bottom: '15%', left: '5%', right: '5%' }} />
+             style={{ top: '10%', bottom: '10%', left: '4%', right: '4%' }} />
 
         {/* Players */}
         {seatedPlayers.map((player, i) => (
@@ -579,25 +599,20 @@ function FullModeLayout() {
             isCurrentPlayer={player.id === playerId}
             showCards={showCards}
             position={positions[i] || { x: 50, y: 50 }}
+            actionBadge={
+              recentActorId === player.id && gameState.lastAction
+                ? gameState.lastAction
+                : null
+            }
           />
         ))}
 
         {/* Center: Phase label, Pot, Cards */}
-        <div className="absolute left-1/2 top-[38%] -translate-x-1/2 -translate-y-1/2
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
                         flex flex-col items-center gap-2">
           <PotDisplay pots={gameState.pots} />
           <CommunityCards cards={gameState.communityCards} />
         </div>
-
-        {/* Last action banner */}
-        {gameState.lastAction && (
-          <div className="absolute bottom-[18%] left-1/2 -translate-x-1/2
-                          bg-black/50 px-3 py-1 rounded-full text-xs text-white/70 animate-fade-in">
-            {gameState.players.find(p => p.id === gameState.lastAction!.playerId)?.name}:{' '}
-            {gameState.lastAction.action}
-            {gameState.lastAction.amount !== undefined && ` ${gameState.lastAction.amount.toLocaleString()}`}
-          </div>
-        )}
       </div>
 
       {/* Current player's cards (full mode, shown large at bottom) */}
@@ -660,6 +675,8 @@ function FullModeLayout() {
 
       {/* Admin panel */}
       <AdminPanel />
+
+      <HandRankings />
     </div>
   );
 }

@@ -8,9 +8,22 @@ interface PlayerSeatProps {
   isCurrentPlayer: boolean;
   showCards: boolean;
   position: { x: number; y: number };
+  actionBadge?: { action: string; amount?: number } | null;
 }
 
-export default function PlayerSeat({ player, isActive, isCurrentPlayer, showCards, position }: PlayerSeatProps) {
+function getActionChipStyle(action: string, amount?: number): { label: string; classes: string } | null {
+  const a = action.toLowerCase();
+  const amt = amount !== undefined ? ` ${amount.toLocaleString()}` : '';
+  if (a.includes('fold'))   return { label: 'FOLD',           classes: 'bg-red-500 text-white' };
+  if (a.includes('check'))  return { label: 'CHECK',          classes: 'bg-white text-slate-900' };
+  if (a.includes('call'))   return { label: `CALL${amt}`,     classes: 'bg-emerald-500 text-white' };
+  if (a.includes('raise'))  return { label: `RAISE${amt}`,    classes: 'bg-gold text-black' };
+  if (a.includes('bet'))    return { label: `BET${amt}`,      classes: 'bg-gold text-black' };
+  if (a.includes('all-in')) return { label: `ALL IN${amt}`,   classes: 'bg-yellow-400 text-black animate-pulse' };
+  return null;
+}
+
+export default function PlayerSeat({ player, isActive, isCurrentPlayer, showCards, position, actionBadge }: PlayerSeatProps) {
   const statusColor = player.isFolded
     ? 'opacity-40'
     : player.isAllIn
@@ -34,14 +47,32 @@ export default function PlayerSeat({ player, isActive, isCurrentPlayer, showCard
         </div>
       )}
 
+      {/* Action chip — pops away from the table center so it never covers community cards */}
+      {actionBadge && (() => {
+        const style = getActionChipStyle(actionBadge.action, actionBadge.amount);
+        if (!style) return null;
+        const isBottomSeat = position.y > 55;
+        const placement = isBottomSeat
+          ? 'bottom-0 translate-y-[calc(100%+0.5rem)]'
+          : '-top-8 -translate-y-full';
+        return (
+          <div className={`absolute left-1/2 -translate-x-1/2 ${placement}
+                           px-2.5 py-1 rounded-full text-[11px] font-extrabold tracking-wide
+                           whitespace-nowrap shadow-lg shadow-black/50 border border-black/20
+                           animate-scale-pop z-10 ${style.classes}`}>
+            {style.label}
+          </div>
+        );
+      })()}
+
       {/* Avatar */}
       <div className={`relative ${isActive ? 'active-glow' : ''} rounded-full`}>
-        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold
+        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-extrabold
+          border-2 shadow-lg shadow-black/40
           ${isCurrentPlayer
-            ? 'bg-gold text-black'
-            : 'bg-white/20 text-white'
-          }
-          ${player.isFolded ? 'bg-white/10' : ''}`}
+            ? 'bg-gold text-black border-gold'
+            : 'bg-slate-800 text-white border-white/30'
+          }`}
         >
           {player.name[0].toUpperCase()}
         </div>

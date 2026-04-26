@@ -67,7 +67,8 @@ export default function OpponentBand({ opponents, gameState, currentPlayerId }: 
             {/* Avatar */}
             <div className="relative flex-shrink-0">
               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold
-                ${isFolded ? 'bg-white/10 text-white/30' : 'bg-white/15 text-white'}
+                border shadow-md shadow-black/40
+                bg-slate-800 text-white border-white/30
                 ${isActing ? 'ring-2 ring-blue-400' : ''}`}
               >
                 {player.name[0].toUpperCase()}

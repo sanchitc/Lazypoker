@@ -25,8 +25,7 @@ export default function LobbyScreen() {
   };
 
   const handleCopyLink = () => {
-    const url = `${window.location.origin}/${roomCode}`;
-    navigator.clipboard.writeText(url).then(() => {
+    navigator.clipboard.writeText(roomCode).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
@@ -48,7 +47,7 @@ export default function LobbyScreen() {
             onClick={handleCopyLink}
             className="text-xs bg-white/10 px-3 py-1 rounded-lg hover:bg-white/20 transition"
           >
-            {copied ? 'Copied!' : 'Copy Link'}
+            {copied ? 'Copied!' : 'Copy Code'}
           </button>
         </div>
         <p className="text-white/50 text-sm mt-1">
