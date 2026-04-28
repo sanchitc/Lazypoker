@@ -5,6 +5,19 @@ function rankValue(rank: Rank): number {
   return RANK_VALUES[rank];
 }
 
+const RANK_LABELS: Record<number, string> = {
+  2: 'Twos', 3: 'Threes', 4: 'Fours', 5: 'Fives', 6: 'Sixes', 7: 'Sevens',
+  8: 'Eights', 9: 'Nines', 10: 'Tens', 11: 'Jacks', 12: 'Queens', 13: 'Kings', 14: 'Aces',
+};
+
+const RANK_SINGULAR: Record<number, string> = {
+  2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9', 10: '10',
+  11: 'Jack', 12: 'Queen', 13: 'King', 14: 'Ace',
+};
+
+function plural(v: number): string { return RANK_LABELS[v] ?? String(v); }
+function singular(v: number): string { return RANK_SINGULAR[v] ?? String(v); }
+
 function getCombinations(cards: Card[], size: number): Card[][] {
   if (size === 0) return [[]];
   if (cards.length < size) return [];
@@ -62,47 +75,47 @@ function evaluateFiveCards(cards: Card[]): HandResult {
   }
   // Straight flush
   if (isFlush && isStraight) {
-    return makeResult('straight-flush', 8, [straightHigh], `Straight Flush, ${straightHigh} high`);
+    return makeResult('straight-flush', 8, [straightHigh], `Straight Flush, ${singular(straightHigh)}-high`);
   }
   // Four of a kind
   if (counts[0][1] === 4) {
     const quad = counts[0][0];
     const kicker = counts[1][0];
-    return makeResult('four-of-a-kind', 7, [quad, kicker], `Four of a Kind, ${quad}s`);
+    return makeResult('four-of-a-kind', 7, [quad, kicker], `Four of a Kind, ${plural(quad)}`);
   }
   // Full house
   if (counts[0][1] === 3 && counts[1][1] >= 2) {
-    return makeResult('full-house', 6, [counts[0][0], counts[1][0]], `Full House, ${counts[0][0]}s full of ${counts[1][0]}s`);
+    return makeResult('full-house', 6, [counts[0][0], counts[1][0]], `Full House, ${plural(counts[0][0])} over ${plural(counts[1][0])}`);
   }
   // Flush
   if (isFlush) {
-    return makeResult('flush', 5, values.slice(0, 5), `Flush, ${values[0]} high`);
+    return makeResult('flush', 5, values.slice(0, 5), `Flush, ${singular(values[0])}-high`);
   }
   // Straight
   if (isStraight) {
-    return makeResult('straight', 4, [straightHigh], `Straight, ${straightHigh} high`);
+    return makeResult('straight', 4, [straightHigh], `Straight, ${singular(straightHigh)}-high`);
   }
   // Three of a kind
   if (counts[0][1] === 3) {
     const trips = counts[0][0];
     const kickers = counts.filter(c => c[1] === 1).map(c => c[0]).slice(0, 2);
-    return makeResult('three-of-a-kind', 3, [trips, ...kickers], `Three of a Kind, ${trips}s`);
+    return makeResult('three-of-a-kind', 3, [trips, ...kickers], `Three of a Kind, ${plural(trips)}`);
   }
   // Two pair
   if (counts[0][1] === 2 && counts[1][1] === 2) {
     const highPair = Math.max(counts[0][0], counts[1][0]);
     const lowPair = Math.min(counts[0][0], counts[1][0]);
     const kicker = counts.find(c => c[1] === 1)?.[0] || 0;
-    return makeResult('two-pair', 2, [highPair, lowPair, kicker], `Two Pair, ${highPair}s and ${lowPair}s`);
+    return makeResult('two-pair', 2, [highPair, lowPair, kicker], `Two Pair, ${plural(highPair)} and ${plural(lowPair)}`);
   }
   // One pair
   if (counts[0][1] === 2) {
     const pair = counts[0][0];
     const kickers = counts.filter(c => c[1] === 1).map(c => c[0]).slice(0, 3);
-    return makeResult('one-pair', 1, [pair, ...kickers], `Pair of ${pair}s`);
+    return makeResult('one-pair', 1, [pair, ...kickers], `Pair of ${plural(pair)}`);
   }
   // High card
-  return makeResult('high-card', 0, values.slice(0, 5), `High Card, ${values[0]}`);
+  return makeResult('high-card', 0, values.slice(0, 5), `${singular(values[0])} High`);
 }
 
 export function evaluateHand(holeCards: [Card, Card], communityCards: Card[]): HandResult {

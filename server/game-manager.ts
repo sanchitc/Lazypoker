@@ -1,7 +1,9 @@
-import { GameState, GameMode, GameConfig, GameSummary } from '../common/types.js';
+import { GameState, GameMode, GameConfig, GameSummary, ChatMessage } from '../common/types.js';
 import { createInitialState, addPlayer, removePlayer, selectSeat, processAction, filterStateForPlayer } from './game-engine.js';
 import { generateRoomCode } from './utils.js';
 import { upsertPlayer, startHand, endHand, logAction, logHandWinners } from './db/logger.js';
+
+const CHAT_HISTORY_LIMIT = 50;
 
 interface Room {
   state: GameState;
@@ -10,6 +12,7 @@ interface Room {
   buyIns: Map<string, number>; // playerId -> total buy-in amount
   currentHandId: bigint | null;
   actionSeq: number;
+  chatHistory: ChatMessage[];
 }
 
 export class GameManager {
@@ -29,6 +32,7 @@ export class GameManager {
       buyIns: new Map(),
       currentHandId: null,
       actionSeq: 0,
+      chatHistory: [],
     });
     return roomCode;
   }
@@ -250,6 +254,32 @@ export class GameManager {
 
   deleteRoom(roomCode: string): void {
     this.rooms.delete(roomCode);
+  }
+
+  appendChatMessage(roomCode: string, msg: ChatMessage): boolean {
+    const room = this.rooms.get(roomCode);
+    if (!room) return false;
+    room.chatHistory.push(msg);
+    if (room.chatHistory.length > CHAT_HISTORY_LIMIT) {
+      room.chatHistory.splice(0, room.chatHistory.length - CHAT_HISTORY_LIMIT);
+    }
+    return true;
+  }
+
+  getChatHistory(roomCode: string): ChatMessage[] {
+    return this.rooms.get(roomCode)?.chatHistory ?? [];
+  }
+
+  isPlayerInRoom(roomCode: string, playerId: string): boolean {
+    const room = this.rooms.get(roomCode);
+    if (!room) return false;
+    return room.state.players.some(p => p.id === playerId);
+  }
+
+  getPlayerName(roomCode: string, playerId: string): string | null {
+    const room = this.rooms.get(roomCode);
+    if (!room) return null;
+    return room.state.players.find(p => p.id === playerId)?.name ?? null;
   }
 
   getAllPlayerSocketIds(roomCode: string): { playerId: string; socketId: string }[] {

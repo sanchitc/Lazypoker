@@ -12,6 +12,8 @@ import OpponentBand from '../components/OpponentBand';
 import ChipPotDisplay from '../components/ChipPotDisplay';
 import AwardPotButton from '../components/AwardPotButton';
 import HandRankings from '../components/HandRankings';
+import WinnerBanner from '../components/WinnerBanner';
+import ChatPanel from '../components/ChatPanel';
 import { useSocket } from '../context/SocketContext';
 import { CHIP_COLORS } from '@common/constants';
 import { Button } from '@/components/ui/button';
@@ -300,6 +302,8 @@ function ChipOnlyLayout() {
 
       <AdminPanel />
       <HandRankings />
+      <ChatPanel />
+      <WinnerBanner gameState={gameState} />
     </div>
   );
 }
@@ -597,6 +601,8 @@ function FullModeLayout() {
 
       <AdminPanel />
       <HandRankings />
+      <ChatPanel />
+      <WinnerBanner gameState={gameState} />
     </div>
   );
 }

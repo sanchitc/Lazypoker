@@ -68,6 +68,7 @@ export interface GameState {
   actedThisRound: string[]; // player IDs who have acted in the current betting round
   turnTimer: number; // seconds per turn (0 = disabled)
   allowPlayersAwardPot: boolean; // whether non-admin players can award the pot
+  lastHandSummary: HandSummary | null;
 }
 
 // ===== Actions =====
@@ -89,11 +90,26 @@ export type PlayerAction =
   | { type: 'SHOW_CARDS' }
   | { type: 'LEAVE_GAME' };
 
+// ===== Chat =====
+// Server stores and relays only the encrypted blob — `iv` and `ciphertext`
+// are base64 strings produced by the client using a key derived from the
+// room code. The server never sees plaintext.
+export interface ChatMessage {
+  id: string;
+  fromPlayerId: string;
+  fromName: string;
+  iv: string;
+  ciphertext: string;
+  sentAt: number;
+}
+
 // ===== Socket Events =====
 export interface ServerToClientEvents {
   'state:update': (state: GameState) => void;
   'error': (data: { message: string }) => void;
   'game:ended': (data: { summary: GameSummary }) => void;
+  'chat:message': (msg: ChatMessage) => void;
+  'chat:history': (msgs: ChatMessage[]) => void;
 }
 
 export interface ClientToServerEvents {
@@ -103,6 +119,7 @@ export interface ClientToServerEvents {
   'select-seat': (data: { roomCode: string; playerId: string; seatIndex: number }) => void;
   'configure': (data: { roomCode: string; playerId: string; config: GameConfig }) => void;
   'reconnect-player': (data: { roomCode: string; playerId: string }, callback: (response: { success: boolean }) => void) => void;
+  'chat:send': (data: { roomCode: string; playerId: string; iv: string; ciphertext: string }) => void;
 }
 
 export interface GameConfig {
@@ -138,4 +155,21 @@ export interface HandResult {
   rankValue: number; // higher is better
   kickers: number[];
   description: string;
+}
+
+// ===== Hand Summary =====
+// Populated when a hand reaches HAND_COMPLETE so clients can render a
+// prominent winner announcement.
+export interface HandWinner {
+  playerId: string;
+  amount: number;
+  handDescription?: string;
+  handRank?: HandRank;
+}
+
+export interface HandSummary {
+  handNumber: number;
+  winners: HandWinner[];
+  totalAwarded: number;
+  reason: 'fold' | 'showdown' | 'declared';
 }

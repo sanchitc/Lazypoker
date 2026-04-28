@@ -1,4 +1,4 @@
-import { GameState, Player, PlayerAction, Phase, Pot, Card, GameMode } from '../common/types.js';
+import { GameState, Player, PlayerAction, Phase, Pot, Card, GameMode, HandSummary, HandWinner } from '../common/types.js';
 import { DEFAULT_CONFIG } from '../common/constants.js';
 import { Dealer } from './deck.js';
 import { evaluateHand, compareHands } from './hand-evaluator.js';
@@ -26,6 +26,7 @@ export function createInitialState(roomCode: string, mode: GameMode): GameState 
     actedThisRound: [],
     turnTimer: 0,
     allowPlayersAwardPot: false,
+    lastHandSummary: null,
   };
 }
 
@@ -333,6 +334,12 @@ function determineWinners(state: GameState): GameState {
   if (inHand.length === 1) {
     const winner = inHand[0];
     const totalPot = state.pots.reduce((sum, p) => sum + p.amount, 0);
+    const summary: HandSummary = {
+      handNumber: state.handNumber,
+      winners: [{ playerId: winner.id, amount: totalPot }],
+      totalAwarded: totalPot,
+      reason: 'fold',
+    };
     return {
       ...state,
       players: state.players.map(p =>
@@ -340,6 +347,7 @@ function determineWinners(state: GameState): GameState {
       ),
       pots: [{ amount: 0, eligiblePlayerIds: [] }],
       lastAction: { playerId: winner.id, action: `wins ${totalPot}` },
+      lastHandSummary: summary,
     };
   }
 
@@ -347,6 +355,8 @@ function determineWinners(state: GameState): GameState {
   if (state.mode === 'full' && state.communityCards.length === 5) {
     const pots = calculateSidePots(state);
     let newPlayers = state.players.map(p => ({ ...p }));
+    const winnerTotals = new Map<string, HandWinner>();
+    let totalAwarded = 0;
 
     for (const pot of pots) {
       const eligible = pot.eligiblePlayerIds
@@ -367,15 +377,38 @@ function determineWinners(state: GameState): GameState {
       const remainder = pot.amount - share * winners.length;
 
       for (let i = 0; i < winners.length; i++) {
-        const idx = newPlayers.findIndex(p => p.id === winners[i].player.id);
-        newPlayers[idx].chips += share + (i === 0 ? remainder : 0);
+        const w = winners[i];
+        const idx = newPlayers.findIndex(p => p.id === w.player.id);
+        const award = share + (i === 0 ? remainder : 0);
+        newPlayers[idx].chips += award;
+        totalAwarded += award;
+
+        const existing = winnerTotals.get(w.player.id);
+        if (existing) {
+          existing.amount += award;
+        } else {
+          winnerTotals.set(w.player.id, {
+            playerId: w.player.id,
+            amount: award,
+            handDescription: w.hand.description,
+            handRank: w.hand.rank,
+          });
+        }
       }
     }
+
+    const summary: HandSummary = {
+      handNumber: state.handNumber,
+      winners: Array.from(winnerTotals.values()),
+      totalAwarded,
+      reason: 'showdown',
+    };
 
     return {
       ...state,
       players: newPlayers,
       pots: [{ amount: 0, eligiblePlayerIds: [] }],
+      lastHandSummary: summary,
     };
   }
 
@@ -475,6 +508,7 @@ export function processAction(state: GameState, playerId: string, action: Player
       s.handNumber++;
       s.communityCards = [];
       s.lastAction = null;
+      s.lastHandSummary = null;
       s.bettingRound = 0;
       s.actedThisRound = [];
       for (const p of s.players) {
@@ -673,6 +707,7 @@ export function processAction(state: GameState, playerId: string, action: Player
       const pots = calculateSidePots(preState);
       let newPlayers = preState.players.map(p => ({ ...p }));
       let totalAwarded = 0;
+      const winnerTotals = new Map<string, number>();
 
       for (const pot of pots) {
         // Find selected winners who are eligible for this pot
@@ -682,9 +717,12 @@ export function processAction(state: GameState, playerId: string, action: Player
           const share = Math.floor(pot.amount / eligibleWinners.length);
           const remainder = pot.amount - share * eligibleWinners.length;
           for (let i = 0; i < eligibleWinners.length; i++) {
-            const idx = newPlayers.findIndex(p => p.id === eligibleWinners[i]);
+            const wid = eligibleWinners[i];
+            const idx = newPlayers.findIndex(p => p.id === wid);
             if (idx >= 0) {
-              newPlayers[idx].chips += share + (i === 0 ? remainder : 0);
+              const award = share + (i === 0 ? remainder : 0);
+              newPlayers[idx].chips += award;
+              winnerTotals.set(wid, (winnerTotals.get(wid) ?? 0) + award);
             }
           }
           totalAwarded += pot.amount;
@@ -698,9 +736,12 @@ export function processAction(state: GameState, playerId: string, action: Player
             const share = Math.floor(pot.amount / fallback.length);
             const remainder = pot.amount - share * fallback.length;
             for (let i = 0; i < fallback.length; i++) {
-              const idx = newPlayers.findIndex(p => p.id === fallback[i]);
+              const wid = fallback[i];
+              const idx = newPlayers.findIndex(p => p.id === wid);
               if (idx >= 0) {
-                newPlayers[idx].chips += share + (i === 0 ? remainder : 0);
+                const award = share + (i === 0 ? remainder : 0);
+                newPlayers[idx].chips += award;
+                winnerTotals.set(wid, (winnerTotals.get(wid) ?? 0) + award);
               }
             }
             totalAwarded += pot.amount;
@@ -710,12 +751,23 @@ export function processAction(state: GameState, playerId: string, action: Player
 
       const winnerNames = winners.map(id => state.players.find(p => p.id === id)?.name || '?').join(', ');
 
+      const summary: HandSummary = {
+        handNumber: state.handNumber,
+        winners: Array.from(winnerTotals.entries()).map(([playerId, amount]) => ({
+          playerId,
+          amount,
+        })),
+        totalAwarded,
+        reason: 'declared',
+      };
+
       return {
         ...state,
         players: newPlayers,
         pots: [{ amount: 0, eligiblePlayerIds: [] }],
         phase: 'HAND_COMPLETE',
         lastAction: { playerId, action: `${winnerNames} wins ${totalAwarded}` },
+        lastHandSummary: summary,
       };
     }
 

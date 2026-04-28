@@ -26,6 +26,7 @@ export function setupSocketHandlers(
         socket.join(roomCode);
         callback({ roomCode, playerId: result.playerId });
         broadcastState(roomCode);
+        socket.emit('chat:history', gameManager.getChatHistory(roomCode));
       }
     });
 
@@ -35,6 +36,7 @@ export function setupSocketHandlers(
         socket.join(data.roomCode);
         callback({ success: true, playerId: result.playerId });
         broadcastState(data.roomCode);
+        socket.emit('chat:history', gameManager.getChatHistory(data.roomCode));
       } else {
         callback({ success: false, error: 'Room not found or full' });
       }
@@ -46,6 +48,7 @@ export function setupSocketHandlers(
         socket.join(data.roomCode);
         callback({ success: true });
         broadcastState(data.roomCode);
+        socket.emit('chat:history', gameManager.getChatHistory(data.roomCode));
       } else {
         callback({ success: false });
       }
@@ -95,6 +98,30 @@ export function setupSocketHandlers(
       } else {
         socket.emit('error', { message: 'Invalid action' });
       }
+    });
+
+    socket.on('chat:send', (data) => {
+      // Verify the sender is actually in the room they claim to be in.
+      if (!gameManager.isPlayerInRoom(data.roomCode, data.playerId)) return;
+
+      const fromName = gameManager.getPlayerName(data.roomCode, data.playerId) ?? 'Player';
+
+      // Light validation. The ciphertext is opaque to the server; we only
+      // bound its size so a malicious client can't flood the room buffer.
+      if (typeof data.iv !== 'string' || typeof data.ciphertext !== 'string') return;
+      if (data.iv.length > 64 || data.ciphertext.length > 4096) return;
+
+      const msg = {
+        id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        fromPlayerId: data.playerId,
+        fromName,
+        iv: data.iv,
+        ciphertext: data.ciphertext,
+        sentAt: Date.now(),
+      };
+
+      gameManager.appendChatMessage(data.roomCode, msg);
+      io.to(data.roomCode).emit('chat:message', msg);
     });
 
     socket.on('disconnect', () => {
