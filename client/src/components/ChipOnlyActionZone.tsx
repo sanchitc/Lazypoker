@@ -5,6 +5,7 @@ import ChipRail from './ChipRail';
 import PendingWager from './PendingWager';
 import CommitButton from './CommitButton';
 import ActionHelpers from './ActionHelpers';
+import { Button } from '@/components/ui/button';
 
 export default function ChipOnlyActionZone() {
   const { gameState, playerId, roomCode, isMyTurn, currentPlayer } = useGame();
@@ -39,29 +40,27 @@ export default function ChipOnlyActionZone() {
   const isHandComplete = gameState.phase === 'HAND_COMPLETE';
   const isShowdown = gameState.phase === 'SHOWDOWN';
 
-  // Waiting state
   if (!isMyTurn && !isHandComplete && !isShowdown) {
     const activePlayer = gameState.activePlayerIndex >= 0
       ? gameState.players[gameState.activePlayerIndex]
       : null;
-
     const streetName = gameState.phase === 'FLOP' ? 'flop'
       : gameState.phase === 'TURN' ? 'turn'
       : gameState.phase === 'RIVER' ? 'river' : '';
 
     return (
-      <div className="px-3 py-3">
-        <div className="text-center">
+      <div className="control-rail px-3 py-3">
+        <div className="surface-pill text-center rounded-[22px] px-4 py-3">
           {isBettingPaused ? (
-            <div className="text-yellow-300/60 text-xs breathe">
-              Waiting for {streetName} to be dealt...
+            <div className="text-brass/75 text-xs font-display italic uppercase tracking-[0.18em] breathe">
+              Waiting for {streetName} to be dealt…
             </div>
           ) : activePlayer ? (
-            <div className="text-white/40 text-xs">
-              Waiting for <span className="text-white/70 font-medium">{activePlayer.name}</span>
+            <div className="text-bone-dim text-xs uppercase tracking-[0.18em]">
+              Waiting for <span className="text-bone font-medium normal-case">{activePlayer.name}</span>
             </div>
           ) : (
-            <div className="text-white/30 text-xs breathe">Waiting...</div>
+            <div className="text-bone-dim/60 text-xs uppercase tracking-[0.18em] breathe">Waiting…</div>
           )}
         </div>
       </div>
@@ -69,53 +68,42 @@ export default function ChipOnlyActionZone() {
   }
 
   return (
-    <div className="px-2 pb-2 space-y-1.5 animate-slide-up">
-      {/* Quick action helpers */}
-      <ActionHelpers
-        gameState={gameState}
-        currentPlayer={currentPlayer}
-        onSetAmount={chip.setExactAmount}
-        disabled={!isMyTurn}
-      />
-
-      {/* Chip rail */}
-      <ChipRail
-        availableDenoms={chip.availableDenoms}
-        onAddChip={chip.addChip}
-        disabled={!isMyTurn}
-      />
-
-      {/* Pending wager display */}
-      <PendingWager
-        pendingChips={chip.pendingChips}
-        pendingTotal={chip.pendingTotal}
-        inferredAction={chip.inferredAction}
-        onUndo={chip.undoChip}
-        onClear={chip.clearChips}
-        disabled={!isMyTurn}
-      />
-
-      {/* Bottom: Fold + Commit */}
-      <div className="flex gap-2">
-        <button
-          onClick={handleFold}
+    <div className="control-rail px-3 pb-3 pt-2 animate-slide-up">
+      <div className="space-y-2 rounded-[26px] surface-panel p-3">
+        <ActionHelpers
+          gameState={gameState}
+          currentPlayer={currentPlayer}
+          onSetAmount={chip.setExactAmount}
           disabled={!isMyTurn}
-          className={`py-3 px-4 rounded-xl font-black text-xs uppercase tracking-wide transition-all
-            ${!isMyTurn
-              ? 'bg-white/8 text-white/20 cursor-default'
-              : 'bg-red-600/80 hover:bg-red-600 text-white active:scale-95'
-            }`}
-          aria-label="Fold"
-        >
-          Fold
-        </button>
-        <div className="flex-1">
-          <CommitButton
-            inferredAction={chip.inferredAction}
-            canCommit={chip.canCommit}
-            onCommit={handleCommit}
-            disabled={!isMyTurn}
-          />
+        />
+
+        <ChipRail
+          availableDenoms={chip.availableDenoms}
+          onAddChip={chip.addChip}
+          disabled={!isMyTurn}
+        />
+
+        <PendingWager
+          pendingChips={chip.pendingChips}
+          pendingTotal={chip.pendingTotal}
+          inferredAction={chip.inferredAction}
+          onUndo={chip.undoChip}
+          onClear={chip.clearChips}
+          disabled={!isMyTurn}
+        />
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Button variant="fold" size="lg" className="w-full" onClick={handleFold} disabled={!isMyTurn}>
+            Fold
+          </Button>
+          <div className="w-full">
+            <CommitButton
+              inferredAction={chip.inferredAction}
+              canCommit={chip.canCommit}
+              onCommit={handleCommit}
+              disabled={!isMyTurn}
+            />
+          </div>
         </div>
       </div>
     </div>

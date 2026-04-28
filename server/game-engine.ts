@@ -29,7 +29,7 @@ export function createInitialState(roomCode: string, mode: GameMode): GameState 
   };
 }
 
-export function addPlayer(state: GameState, name: string, isAdmin: boolean): { state: GameState; playerId: string } {
+export function addPlayer(state: GameState, name: string, isAdmin: boolean, playerKey?: string): { state: GameState; playerId: string } {
   const playerId = generatePlayerId();
   const player: Player = {
     id: playerId,
@@ -45,6 +45,7 @@ export function addPlayer(state: GameState, name: string, isAdmin: boolean): { s
     isSittingOut: false,
     isConnected: true,
     isAdmin,
+    playerKey,
   };
   return {
     state: { ...state, players: [...state.players, player] },
@@ -75,7 +76,11 @@ function getActivePlayers(state: GameState): Player[] {
 }
 
 function getPlayersInHand(state: GameState): Player[] {
-  return getActivePlayers(state).filter(p => !p.isFolded);
+  // Include all-in players (chips=0 but still contesting the pot) — getActivePlayers
+  // would exclude them, which would prematurely end a hand at the moment of an all-in.
+  return state.players
+    .filter(p => p.seatIndex >= 0 && !p.isSittingOut && !p.isFolded && (p.chips > 0 || p.isAllIn))
+    .sort((a, b) => a.seatIndex - b.seatIndex);
 }
 
 function getNextActivePlayerIndex(state: GameState, fromSeat: number): number {
@@ -777,14 +782,19 @@ export function filterStateForPlayer(state: GameState, playerId: string): GameSt
   const isShowdown = state.phase === 'SHOWDOWN' || state.phase === 'HAND_COMPLETE';
   return {
     ...state,
-    players: state.players.map(p => ({
-      ...p,
-      holeCards:
-        p.id === playerId ||
-        (isShowdown && !p.isFolded) ||
-        p.wantsToShowCards
-          ? p.holeCards
-          : null,
-    })),
+    players: state.players.map(p => {
+      // Strip playerKey from broadcasts — it's a server-only analytics id.
+      const { playerKey: _omit, ...rest } = p;
+      void _omit;
+      return {
+        ...rest,
+        holeCards:
+          p.id === playerId ||
+          (isShowdown && !p.isFolded) ||
+          p.wantsToShowCards
+            ? p.holeCards
+            : null,
+      };
+    }),
   };
 }

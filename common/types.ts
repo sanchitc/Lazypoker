@@ -23,6 +23,9 @@ export interface Player {
   isConnected: boolean;
   isAdmin: boolean;
   wantsToShowCards?: boolean;
+  // Stable client-generated id (localStorage). Used for analytics aggregation
+  // across rooms/sessions. Server-only field; filtered out before sending state.
+  playerKey?: string;
 }
 
 // ===== Game =====
@@ -94,8 +97,8 @@ export interface ServerToClientEvents {
 }
 
 export interface ClientToServerEvents {
-  'create': (data: { playerName: string; mode: GameMode }, callback: (response: { roomCode: string; playerId: string }) => void) => void;
-  'join': (data: { playerName: string; roomCode: string }, callback: (response: { success: boolean; playerId?: string; error?: string }) => void) => void;
+  'create': (data: { playerName: string; mode: GameMode; playerKey?: string }, callback: (response: { roomCode: string; playerId: string }) => void) => void;
+  'join': (data: { playerName: string; roomCode: string; playerKey?: string }, callback: (response: { success: boolean; playerId?: string; error?: string }) => void) => void;
   'action': (data: { roomCode: string; playerId: string; action: PlayerAction }) => void;
   'select-seat': (data: { roomCode: string; playerId: string; seatIndex: number }) => void;
   'configure': (data: { roomCode: string; playerId: string; config: GameConfig }) => void;

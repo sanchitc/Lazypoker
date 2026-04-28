@@ -1,12 +1,15 @@
 import { GameState, GameMode, GameConfig, GameSummary } from '../common/types.js';
 import { createInitialState, addPlayer, removePlayer, selectSeat, processAction, filterStateForPlayer } from './game-engine.js';
 import { generateRoomCode } from './utils.js';
+import { upsertPlayer, startHand, endHand, logAction, logHandWinners } from './db/logger.js';
 
 interface Room {
   state: GameState;
   playerSocketMap: Map<string, string>; // playerId -> socketId
   socketPlayerMap: Map<string, string>; // socketId -> playerId
   buyIns: Map<string, number>; // playerId -> total buy-in amount
+  currentHandId: bigint | null;
+  actionSeq: number;
 }
 
 export class GameManager {
@@ -24,21 +27,25 @@ export class GameManager {
       playerSocketMap: new Map(),
       socketPlayerMap: new Map(),
       buyIns: new Map(),
+      currentHandId: null,
+      actionSeq: 0,
     });
     return roomCode;
   }
 
-  joinRoom(roomCode: string, playerName: string, socketId: string): { playerId: string; state: GameState } | null {
+  joinRoom(roomCode: string, playerName: string, socketId: string, playerKey?: string): { playerId: string; state: GameState } | null {
     const room = this.rooms.get(roomCode);
     if (!room) return null;
     if (room.state.players.length >= room.state.maxPlayers) return null;
 
     const isAdmin = room.state.players.length === 0;
-    const { state, playerId } = addPlayer(room.state, playerName, isAdmin);
+    const { state, playerId } = addPlayer(room.state, playerName, isAdmin, playerKey);
     room.state = state;
     room.playerSocketMap.set(playerId, socketId);
     room.socketPlayerMap.set(socketId, playerId);
     room.buyIns.set(playerId, state.startingChips);
+
+    upsertPlayer(playerKey, playerName);
 
     return { playerId, state: room.state };
   }
@@ -130,7 +137,8 @@ export class GameManager {
     const room = this.rooms.get(roomCode);
     if (!room) return null;
 
-    const newState = processAction(room.state, playerId, action);
+    const prevState = room.state;
+    const newState = processAction(prevState, playerId, action);
     room.state = newState;
 
     // Track additional buy-ins
@@ -139,7 +147,68 @@ export class GameManager {
       room.buyIns.set(action.playerId, current + action.amount);
     }
 
+    // Engine returns same reference if action was rejected — skip logging.
+    if (newState !== prevState) {
+      this.recordAction(room, prevState, newState, playerId, action);
+    }
+
     return room.state;
+  }
+
+  private recordAction(
+    room: Room,
+    prevState: GameState,
+    newState: GameState,
+    playerId: string,
+    action: any
+  ): void {
+    // Hand started: increment in handNumber means a new hand has begun.
+    if (newState.handNumber > prevState.handNumber) {
+      room.currentHandId = null;
+      room.actionSeq = 0;
+      // Kick off async hand creation; subsequent actions race against this
+      // resolving but the seq is still correct, and updates apply once handId
+      // is available.
+      void (async () => {
+        try {
+          room.currentHandId = await startHand(newState);
+        } catch (err) {
+          console.error('[log] startHand failed:', err);
+        }
+      })();
+    }
+
+    // Log the player action (skip pure admin lifecycle events that don't
+    // affect a hand's action sequence).
+    const skipTypes = new Set(['END_GAME', 'LEAVE_GAME', 'KICK_PLAYER', 'SET_DEALER',
+                                'ADD_CHIPS', 'REMOVE_CHIPS', 'SHOW_CARDS', 'NEXT_ROUND',
+                                'START_HAND']);
+    if (!skipTypes.has(action.type)) {
+      const seq = room.actionSeq++;
+      logAction({
+        handId: room.currentHandId,
+        seq,
+        prevState,
+        newState,
+        playerId,
+        action,
+      });
+    }
+
+    // Hand completed: synthesize WIN_POT events and finalize hand row.
+    const handJustCompleted =
+      prevState.phase !== 'HAND_COMPLETE' && newState.phase === 'HAND_COMPLETE';
+    if (handJustCompleted && room.currentHandId !== undefined) {
+      const startSeq = room.actionSeq;
+      const { winnerKeys, potTotal } = logHandWinners(
+        room.currentHandId,
+        prevState,
+        newState,
+        startSeq
+      );
+      room.actionSeq = startSeq + winnerKeys.length;
+      endHand(room.currentHandId, newState, winnerKeys, potTotal, newState.communityCards);
+    }
   }
 
   getFilteredState(roomCode: string, playerId: string): GameState | null {

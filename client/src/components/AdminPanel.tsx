@@ -1,7 +1,18 @@
 import { useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { useSocket } from '../context/SocketContext';
-import { Player } from '@common/types';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
+import { Crown, Plus, Minus } from 'lucide-react';
 
 export default function AdminPanel() {
   const { gameState, playerId, roomCode, isAdmin } = useGame();
@@ -39,92 +50,103 @@ export default function AdminPanel() {
 
   return (
     <>
-      {/* Toggle button */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-3 right-3 z-50 w-10 h-10 bg-gold text-black rounded-full
-                   font-bold text-lg shadow-lg active:scale-90 transition-transform"
+        onClick={() => setIsOpen(true)}
+        className="fixed top-3 right-3 z-50 flex h-11 w-11 items-center justify-center rounded-full
+                   border border-brass/24 bg-panel-strong/82 text-brass
+                   flex items-center justify-center shadow-lg
+                   focus:outline-none focus-visible:ring-2 focus-visible:ring-brass focus-visible:ring-offset-2
+                   hover:border-brass/36 hover:bg-panel active:scale-90 transition-all"
+        aria-label="Banker panel"
       >
-        ★
+        <Crown className="h-5 w-5" />
       </button>
 
-      {/* Panel */}
-      {isOpen && (
-        <div className="fixed inset-0 z-40 bg-black/60 flex items-end justify-center"
-             onClick={() => setIsOpen(false)}>
-          <div className="w-full max-w-md bg-felt-dark rounded-t-2xl p-4 space-y-3 max-h-[80vh] overflow-y-auto"
-               onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-gold font-bold text-lg">Banker Panel</h3>
-              <button onClick={() => setIsOpen(false)} className="text-white/50 text-2xl">&times;</button>
-            </div>
+      <Sheet open={isOpen} onOpenChange={setIsOpen}>
+        <SheetContent
+          side="right"
+          className="w-full max-w-sm sm:max-w-sm overflow-y-auto scrollbar-brass felt-noise"
+        >
+          <SheetHeader>
+            <SheetTitle>Banker Panel</SheetTitle>
+            <SheetDescription>Manage the table and pot.</SheetDescription>
+          </SheetHeader>
 
-            {/* Start new hand */}
+          <div className="space-y-3">
             {(isHandComplete || gameState.phase === 'SETUP') && (
-              <button
+              <Button
+                variant="check"
+                size="lg"
+                className="w-full"
                 onClick={() => { sendAction({ type: 'START_HAND' }); setIsOpen(false); }}
-                className="w-full py-3 bg-green-600 rounded-xl font-bold active:scale-95 transition-all"
               >
                 Deal New Hand
-              </button>
+              </Button>
             )}
 
-            {/* Chip-only mode: Declare Winner (banker only) */}
             {gameState.mode === 'chip-only' && (isHandInProgress || (isHandComplete && totalPot > 0)) && (
-              <button
+              <Button
+                variant="raise"
+                size="lg"
+                className="w-full"
                 onClick={() => { setShowDeclareWinner(true); setSelectedWinners([]); }}
-                className="w-full py-3 bg-gold text-black rounded-xl font-bold active:scale-95 transition-all"
               >
                 Declare Winner
-              </button>
+              </Button>
             )}
 
-            {/* Declare winner modal */}
             {showDeclareWinner && (
-              <div className="bg-white/5 rounded-xl p-3 space-y-2">
-                <h4 className="text-sm font-semibold text-white/70">Select winner(s):</h4>
+              <div className="surface-panel-soft rounded-[20px] p-3 space-y-2">
+                <div className="text-[10px] uppercase tracking-[0.18em] text-bone-dim">
+                  Select winner(s)
+                </div>
                 {inHandPlayers.map(p => (
                   <button
                     key={p.id}
                     onClick={() => toggleWinner(p.id)}
-                    className={`w-full py-2 px-3 rounded-lg text-left flex items-center justify-between
+                    className={`w-full rounded-xl py-2 px-3 text-left flex items-center justify-between
+                      transition-all active:scale-[0.98]
                       ${selectedWinners.includes(p.id)
-                        ? 'bg-gold/30 border border-gold'
-                        : 'bg-white/5 border border-white/10'}`}
+                        ? 'border border-brass/28 bg-brass/12 text-bone'
+                        : 'border border-bone/8 bg-panel/60 text-bone-dim hover:text-bone'}`}
                   >
-                    <span>{p.name}</span>
-                    {selectedWinners.includes(p.id) && <span className="text-gold">✓</span>}
+                    <span className="text-sm">{p.name}</span>
+                    {selectedWinners.includes(p.id) && <span className="text-brass">✓</span>}
                   </button>
                 ))}
                 <div className="flex gap-2 mt-2">
-                  <button
-                    onClick={() => setShowDeclareWinner(false)}
-                    className="flex-1 py-2 bg-white/10 rounded-lg text-sm"
-                  >
+                  <Button variant="outline" className="flex-1" onClick={() => setShowDeclareWinner(false)}>
                     Cancel
-                  </button>
-                  <button
-                    onClick={handleDeclareWinner}
+                  </Button>
+                  <Button
+                    variant="raise"
+                    className="flex-1"
                     disabled={selectedWinners.length === 0}
-                    className="flex-1 py-2 bg-gold text-black rounded-lg text-sm font-bold disabled:opacity-50"
+                    onClick={handleDeclareWinner}
                   >
                     Award Pot
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
 
+            <Separator />
+
             {/* Player management */}
             <div className="space-y-1">
-              <h4 className="text-sm font-semibold text-white/50 mt-2">Players</h4>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-bone-dim mb-1">Players</div>
               {gameState.players.filter(p => p.seatIndex >= 0).map(p => (
-                <div key={p.id} className="flex items-center justify-between py-2 px-3 bg-white/5 rounded-lg">
-                  <div>
-                    <span className="text-sm">{p.name}</span>
-                    <span className="text-xs text-white/50 ml-2">{p.chips.toLocaleString()}</span>
+                <div key={p.id} className="surface-panel-soft flex items-center justify-between rounded-xl py-2 px-3">
+                  <div className="min-w-0">
+                    <div className="text-sm text-bone truncate">{p.name}</div>
+                    <div className="text-[11px] text-bone-dim font-mono tabular-nums">
+                      {p.chips.toLocaleString()}
+                    </div>
                   </div>
                   <div className="flex gap-1">
-                    <button
+                    <Button
+                      variant={showAddChips === p.id ? 'raise' : 'host'}
+                      size="sm"
                       onClick={() => {
                         if (showAddChips === p.id) {
                           sendAction({ type: 'ADD_CHIPS', playerId: p.id, amount: addAmount });
@@ -133,53 +155,83 @@ export default function AdminPanel() {
                           setShowAddChips(p.id);
                         }
                       }}
-                      className="px-2 py-1 bg-green-600/50 rounded text-xs hover:bg-green-600"
                     >
-                      {showAddChips === p.id ? `+${addAmount}` : '+Chips'}
-                    </button>
+                      {showAddChips === p.id ? `+${addAmount}` : '+ Chips'}
+                    </Button>
                     {p.id !== playerId && (
-                      <button
+                      <Button
+                        variant="fold"
+                        size="sm"
                         onClick={() => sendAction({ type: 'KICK_PLAYER', playerId: p.id })}
-                        className="px-2 py-1 bg-red-600/50 rounded text-xs hover:bg-red-600"
                       >
                         Kick
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Add chips amount selector */}
             {showAddChips && (
-              <div className="flex gap-1 flex-wrap">
-                {[100, 250, 500, 1000, 2000].map(amt => (
-                  <button
-                    key={amt}
-                    onClick={() => setAddAmount(amt)}
-                    className={`px-2 py-1 rounded text-xs ${addAmount === amt ? 'bg-gold text-black' : 'bg-white/10'}`}
+              <div className="surface-panel-soft rounded-[20px] p-3 space-y-2">
+                <Label>Add chips amount</Label>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setAddAmount(Math.max(100, addAmount - 100))}
                   >
-                    {amt}
-                  </button>
-                ))}
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                  <Input
+                    type="number"
+                    value={addAmount}
+                    onChange={(e) => setAddAmount(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="text-center font-mono text-lg"
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setAddAmount(addAmount + 100)}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="flex gap-1 flex-wrap">
+                  {[100, 250, 500, 1000, 2000].map(amt => (
+                    <button
+                      key={amt}
+                      onClick={() => setAddAmount(amt)}
+                      className={`rounded-full px-2.5 py-1 text-xs font-mono transition-colors
+                        ${addAmount === amt
+                          ? 'bg-gradient-to-b from-[#f1dca8] to-brass text-obsidian'
+                          : 'bg-panel-soft text-bone-dim hover:text-bone'}`}
+                    >
+                      {amt}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
-            {/* End game */}
-            <button
+            <Separator />
+
+            <Button
+              variant="fold"
+              size="lg"
+              className="w-full"
               onClick={() => {
                 if (confirm('End the game?')) {
                   sendAction({ type: 'END_GAME' });
                   setIsOpen(false);
                 }
               }}
-              className="w-full py-3 bg-red-600/50 rounded-xl text-sm active:scale-95 transition-all"
             >
               End Game
-            </button>
+            </Button>
           </div>
-        </div>
-      )}
+        </SheetContent>
+      </Sheet>
     </>
   );
 }

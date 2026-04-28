@@ -21,7 +21,7 @@ export function setupSocketHandlers(
 
     socket.on('create', (data, callback) => {
       const roomCode = gameManager.createRoom(data.mode);
-      const result = gameManager.joinRoom(roomCode, data.playerName, socket.id);
+      const result = gameManager.joinRoom(roomCode, data.playerName, socket.id, data.playerKey);
       if (result) {
         socket.join(roomCode);
         callback({ roomCode, playerId: result.playerId });
@@ -30,7 +30,7 @@ export function setupSocketHandlers(
     });
 
     socket.on('join', (data, callback) => {
-      const result = gameManager.joinRoom(data.roomCode, data.playerName, socket.id);
+      const result = gameManager.joinRoom(data.roomCode, data.playerName, socket.id, data.playerKey);
       if (result) {
         socket.join(data.roomCode);
         callback({ success: true, playerId: result.playerId });

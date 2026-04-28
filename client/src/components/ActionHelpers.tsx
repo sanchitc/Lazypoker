@@ -22,12 +22,10 @@ export default function ActionHelpers({ gameState, currentPlayer, onSetAmount, d
     const totalPot = gameState.pots.reduce((sum, p) => sum + p.amount, 0);
     const minRaiseTotal = gameState.currentBet + gameState.minRaise;
 
-    // Exact Call
     if (toCall > 0 && toCall < stack) {
       result.push({ label: `Call ${toCall}`, amount: toCall, variant: 'default' });
     }
 
-    // Min Raise / Min Bet
     if (toCall <= 0) {
       const minBet = gameState.minRaise;
       if (minBet < stack) {
@@ -40,7 +38,6 @@ export default function ActionHelpers({ gameState, currentPlayer, onSetAmount, d
       }
     }
 
-    // Pot-based helpers
     if (totalPot > 0 && gameState.phase !== 'PRE_FLOP') {
       const halfPot = Math.floor(totalPot / 2);
       const fullPot = totalPot;
@@ -48,14 +45,13 @@ export default function ActionHelpers({ gameState, currentPlayer, onSetAmount, d
       const toFullPot = toCall > 0 ? Math.max(fullPot, toCall) : fullPot;
 
       if (toHalfPot > 0 && toHalfPot < stack) {
-        result.push({ label: '1/2 Pot', amount: toHalfPot, variant: 'accent' });
+        result.push({ label: '½ Pot', amount: toHalfPot, variant: 'accent' });
       }
       if (toFullPot > 0 && toFullPot < stack && toFullPot !== toHalfPot) {
         result.push({ label: 'Pot', amount: toFullPot, variant: 'accent' });
       }
     }
 
-    // All-in
     if (stack > 0) {
       result.push({ label: 'All-in', amount: stack, variant: 'danger' });
     }
@@ -66,21 +62,22 @@ export default function ActionHelpers({ gameState, currentPlayer, onSetAmount, d
   if (helpers.length === 0) return null;
 
   const variantStyles = {
-    default: 'bg-white/10 border-white/15 text-white/80 hover:bg-white/20',
-    accent: 'bg-gold/15 border-gold/25 text-gold hover:bg-gold/25',
-    danger: 'bg-red-500/15 border-red-500/25 text-red-300 hover:bg-red-500/25',
+    default: 'bg-panel-soft/72 border-bone/10 text-bone hover:border-brass/26 hover:bg-panel-soft/90',
+    accent: 'bg-brass/12 border-brass/28 text-brass hover:bg-brass/18',
+    danger: 'bg-ember/12 border-ember/30 text-[hsl(10_78%_76%)] hover:bg-ember/18',
   };
 
   return (
-    <div className="flex gap-1.5 flex-wrap justify-center px-1">
+    <div className="flex flex-wrap justify-center gap-1.5 px-1">
       {helpers.map(h => (
         <button
           key={h.label}
           disabled={disabled}
           onClick={() => onSetAmount(h.amount)}
-          className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border
+          className={`rounded-full border px-3.5 py-1.5 text-[11px] font-mono font-semibold tabular-nums transition-all
+            focus:outline-none focus-visible:ring-2 focus-visible:ring-brass
             ${disabled
-              ? 'bg-white/5 border-white/5 text-white/20 cursor-default'
+              ? 'bg-panel-strong/45 border-bone/6 text-bone-dim/30 cursor-default'
               : `${variantStyles[h.variant]} active:scale-95`
             }`}
           aria-label={`${h.label} ${h.amount}`}

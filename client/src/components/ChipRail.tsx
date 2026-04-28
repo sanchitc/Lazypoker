@@ -27,7 +27,7 @@ export default function ChipRail({ availableDenoms, onAddChip, disabled }: ChipR
   }, [onAddChip, stopRepeat]);
 
   return (
-    <div className="flex gap-1 justify-center items-center px-1">
+    <div className="surface-panel-soft flex items-center justify-center gap-2 rounded-[22px] px-2 py-2">
       {availableDenoms.map(({ value, count }) => {
         const color = CHIP_COLOR_MAP.get(value) ?? '#888';
         const exhausted = count <= 0;
@@ -43,32 +43,36 @@ export default function ChipRail({ availableDenoms, onAddChip, disabled }: ChipR
             onPointerLeave={stopRepeat}
             onPointerCancel={stopRepeat}
             className={`flex flex-col items-center gap-0 select-none transition-all chip-wobble
+              focus:outline-none focus-visible:ring-2 focus-visible:ring-brass rounded-full
               ${isDisabled ? 'opacity-25 cursor-default' : 'active:scale-90 cursor-pointer'}`}
             aria-label={`Add ${value} chip`}
           >
-            {/* Single chip visual */}
             <div
-              className="w-10 h-10 rounded-full border-2 border-white/30 flex items-center justify-center
-                         shadow-md relative overflow-hidden"
+              className="w-10 h-10 rounded-full flex items-center justify-center relative overflow-hidden"
               style={{
-                backgroundColor: color,
-                boxShadow: `0 3px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2),
-                             inset 0 -1px 0 rgba(0,0,0,0.2)`,
+                background: `radial-gradient(circle at 30% 30%, ${color}, color-mix(in oklab, ${color} 65%, black) 90%)`,
+                border: '1px solid rgba(255,255,255,0.22)',
+                boxShadow: `
+                  inset 0 1px 0 rgba(255,255,255,0.32),
+                  inset 0 -1px 0 rgba(0,0,0,0.32),
+                  0 6px 12px hsl(206 30% 4% / 0.6)
+                `,
               }}
             >
-              {/* Inner ring detail */}
-              <div className="absolute inset-[3px] rounded-full border border-white/15" />
-              <span className={`text-xs font-black tabular-nums relative z-10
-                ${value >= 500 ? 'text-white' : value <= 1 ? 'text-gray-600' : 'text-white'}
-                ${value >= 1000 ? 'text-[10px]' : ''}`}
+              <div className="absolute inset-[3px] rounded-full border border-bone/15" />
+              <span
+                className={`font-mono font-bold tabular-nums relative z-10
+                  ${value >= 1000 ? 'text-[10px]' : 'text-xs'}`}
+                style={{
+                  color: value <= 1 ? 'rgba(40,40,40,0.95)' : 'rgba(255,255,255,0.95)',
+                }}
               >
                 {value >= 1000 ? `${value / 1000}K` : value}
               </span>
             </div>
-            {/* Count badge */}
-            <span className={`text-[9px] tabular-nums mt-0.5 font-medium
-              ${exhausted ? 'text-white/20' : 'text-white/45'}`}>
-              {exhausted ? '-' : count}
+            <span className={`mt-0.5 text-[9px] font-mono tabular-nums
+              ${exhausted ? 'text-bone-dim/28' : 'text-bone-dim/65'}`}>
+              {exhausted ? '—' : count}
             </span>
           </button>
         );

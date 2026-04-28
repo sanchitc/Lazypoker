@@ -10,18 +10,23 @@ export default function PotDisplay({ pots }: PotDisplayProps) {
   if (totalPot === 0) return null;
 
   return (
-    <div className="flex flex-col items-center gap-1">
-      <div className="bg-black/40 backdrop-blur-sm px-4 py-2 rounded-full
-                      border border-gold/30 pot-pulse">
-        <div className="text-gold font-bold text-lg tabular-nums">
-          Pot: {totalPot.toLocaleString()}
-        </div>
+    <div className="flex flex-col items-center gap-2">
+      <div className="surface-pill pot-pulse rounded-full px-6 py-2.5">
+        <span className="mr-2 align-middle text-[10px] uppercase tracking-[0.26em] text-bone-dim">
+          Pot
+        </span>
+        <span className="font-display tabular-display brass-shimmer-text align-middle text-[28px] leading-none">
+          {totalPot.toLocaleString()}
+        </span>
       </div>
       {pots.length > 1 && (
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-center gap-2">
           {pots.map((pot, i) => (
             pot.amount > 0 && (
-              <div key={i} className="bg-black/30 px-2 py-0.5 rounded text-xs text-white/70">
+              <div
+                key={i}
+                className="surface-panel-soft rounded-full px-2.5 py-1 text-[10px] font-mono tabular-nums text-bone-dim"
+              >
                 {i === 0 ? 'Main' : `Side ${i}`}: {pot.amount.toLocaleString()}
               </div>
             )

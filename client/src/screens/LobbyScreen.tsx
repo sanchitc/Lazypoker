@@ -1,9 +1,24 @@
 import { useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { useSocket } from '../context/SocketContext';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Copy, Check } from 'lucide-react';
 
-const SEAT_LABELS = ['Seat 1', 'Seat 2', 'Seat 3', 'Seat 4', 'Seat 5',
-                     'Seat 6', 'Seat 7', 'Seat 8', 'Seat 9', 'Seat 10'];
+const SEAT_LABELS = [
+  'Seat 1', 'Seat 2', 'Seat 3', 'Seat 4', 'Seat 5',
+  'Seat 6', 'Seat 7', 'Seat 8', 'Seat 9', 'Seat 10',
+];
 
 export default function LobbyScreen() {
   const { gameState, playerId, roomCode, isAdmin } = useGame();
@@ -24,6 +39,12 @@ export default function LobbyScreen() {
     socket?.emit('configure', { roomCode, playerId, config: { [key]: value } });
   };
 
+  const handleBlinds = (val: string) => {
+    const [sb, bb] = val.split('/').map(Number);
+    handleConfigure('smallBlind', sb);
+    setTimeout(() => handleConfigure('bigBlind', bb), 50);
+  };
+
   const handleCopyLink = () => {
     navigator.clipboard.writeText(roomCode).then(() => {
       setCopied(true);
@@ -35,140 +56,155 @@ export default function LobbyScreen() {
   const canStart = seatedPlayers.length >= 2;
 
   return (
-    <div className="h-full flex flex-col p-4">
+    <div className="h-full flex flex-col p-4 felt-noise vignette">
       {/* Header */}
       <div className="text-center mb-4">
-        <h2 className="text-2xl font-bold">
-          Lazy<span className="text-gold">Poker</span>
+        <h2 className="font-display text-3xl font-medium tracking-tight leading-none">
+          <span className="text-bone">Lazy</span>
+          <span className="italic text-brass">Poker</span>
         </h2>
-        <div className="mt-2 flex items-center justify-center gap-2">
-          <span className="text-3xl font-mono tracking-[0.3em] text-gold">{roomCode}</span>
-          <button
-            onClick={handleCopyLink}
-            className="text-xs bg-white/10 px-3 py-1 rounded-lg hover:bg-white/20 transition"
-          >
-            {copied ? 'Copied!' : 'Copy Code'}
-          </button>
+        <div className="mt-3 flex items-center justify-center gap-2">
+          <span className="font-mono text-3xl tracking-[0.4em] text-brass">{roomCode}</span>
+          <Button variant="outline" size="sm" onClick={handleCopyLink}>
+            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            <span className="ml-1.5 text-xs">{copied ? 'Copied' : 'Copy'}</span>
+          </Button>
         </div>
-        <p className="text-white/50 text-sm mt-1">
-          {gameState.mode === 'chip-only' ? 'Chip Only Mode' : 'Full Game Mode'}
-          {' · '}
+        <p className="text-bone-dim/80 text-xs mt-2 tracking-wide uppercase">
+          {gameState.mode === 'chip-only' ? 'Chip Only' : 'Full Game'}
+          <span className="mx-2 text-brass/40">·</span>
           {gameState.players.length} player{gameState.players.length !== 1 ? 's' : ''}
         </p>
       </div>
 
       {/* Admin Config */}
       {isAdmin && (
-        <div className="bg-white/5 rounded-xl p-4 mb-4 space-y-3">
-          <h3 className="font-semibold text-sm text-gold">Game Settings</h3>
-
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-white/70">Mode</span>
-            <div className="flex gap-1">
-              <button
-                onClick={() => handleConfigure('mode', 'chip-only')}
-                className={`px-3 py-1 rounded text-xs ${gameState.mode === 'chip-only' ? 'bg-gold text-black' : 'bg-white/10'}`}
+        <Card className="mb-4">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs uppercase tracking-[0.18em] text-bone-dim">Mode</span>
+              <ToggleGroup
+                type="single"
+                value={gameState.mode}
+                onValueChange={(v) => v && handleConfigure('mode', v)}
               >
-                Chip Only
-              </button>
-              <button
-                onClick={() => handleConfigure('mode', 'full')}
-                className={`px-3 py-1 rounded text-xs ${gameState.mode === 'full' ? 'bg-gold text-black' : 'bg-white/10'}`}
-              >
-                Full
-              </button>
+                <ToggleGroupItem value="chip-only" className="px-3 py-1 text-[11px]">Chip Only</ToggleGroupItem>
+                <ToggleGroupItem value="full" className="px-3 py-1 text-[11px]">Full</ToggleGroupItem>
+              </ToggleGroup>
             </div>
-          </div>
 
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-white/70">Starting Chips</span>
-            <select
-              value={gameState.startingChips}
-              onChange={(e) => handleConfigure('startingChips', parseInt(e.target.value))}
-              className="bg-white/10 rounded px-2 py-1 text-sm"
-            >
-              {[500, 1000, 2000, 5000, 10000].map(v => (
-                <option key={v} value={v}>{v.toLocaleString()}</option>
-              ))}
-            </select>
-          </div>
+            <Separator />
 
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-white/70">Turn Timer</span>
-            <select
-              value={gameState.turnTimer ?? 0}
-              onChange={(e) => handleConfigure('turnTimer', parseInt(e.target.value))}
-              className="bg-white/10 rounded px-2 py-1 text-sm"
-            >
-              <option value={0}>Off</option>
-              <option value={15}>15s</option>
-              <option value={30}>30s</option>
-              <option value={60}>60s</option>
-              <option value={90}>90s</option>
-            </select>
-          </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs uppercase tracking-[0.18em] text-bone-dim">Starting Chips</span>
+              <Select
+                value={String(gameState.startingChips)}
+                onValueChange={(v) => handleConfigure('startingChips', parseInt(v))}
+              >
+                <SelectTrigger className="w-32 h-9 text-sm font-mono">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[500, 1000, 2000, 5000, 10000].map(v => (
+                    <SelectItem key={v} value={String(v)} className="font-mono">
+                      {v.toLocaleString()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-white/70">Blinds</span>
-            <select
-              value={`${gameState.smallBlind}/${gameState.bigBlind}`}
-              onChange={(e) => {
-                const [sb, bb] = e.target.value.split('/').map(Number);
-                handleConfigure('smallBlind', sb);
-                setTimeout(() => handleConfigure('bigBlind', bb), 50);
-              }}
-              className="bg-white/10 rounded px-2 py-1 text-sm"
-            >
-              {[
-                [1, 2], [5, 10], [10, 20], [25, 50], [50, 100], [100, 200],
-              ].map(([sb, bb]) => (
-                <option key={`${sb}/${bb}`} value={`${sb}/${bb}`}>{sb}/{bb}</option>
-              ))}
-            </select>
-          </div>
-        </div>
+            <Separator />
+
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs uppercase tracking-[0.18em] text-bone-dim">Turn Timer</span>
+              <Select
+                value={String(gameState.turnTimer ?? 0)}
+                onValueChange={(v) => handleConfigure('turnTimer', parseInt(v))}
+              >
+                <SelectTrigger className="w-32 h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">Off</SelectItem>
+                  <SelectItem value="15">15 seconds</SelectItem>
+                  <SelectItem value="30">30 seconds</SelectItem>
+                  <SelectItem value="60">60 seconds</SelectItem>
+                  <SelectItem value="90">90 seconds</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Separator />
+
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs uppercase tracking-[0.18em] text-bone-dim">Blinds</span>
+              <Select
+                value={`${gameState.smallBlind}/${gameState.bigBlind}`}
+                onValueChange={handleBlinds}
+              >
+                <SelectTrigger className="w-32 h-9 text-sm font-mono">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[[1, 2], [5, 10], [10, 20], [25, 50], [50, 100], [100, 200]].map(([sb, bb]) => (
+                    <SelectItem key={`${sb}/${bb}`} value={`${sb}/${bb}`} className="font-mono">
+                      {sb}/{bb}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Seats Grid */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto scrollbar-brass">
         <div className="grid grid-cols-2 gap-2">
           {Array.from({ length: gameState.maxPlayers }, (_, i) => {
             const seated = gameState.players.find(p => p.seatIndex === i);
             const isMe = seated?.id === playerId;
             const myCurrentSeat = gameState.players.find(p => p.id === playerId)?.seatIndex;
+            const isClickable = !seated;
 
             return (
               <button
                 key={i}
-                onClick={() => !seated && handleSeatSelect(i)}
+                onClick={() => isClickable && handleSeatSelect(i)}
                 disabled={!!seated && !isMe}
-                className={`p-3 rounded-xl border transition-all text-left
+                className={`p-3 rounded-md border text-left transition-all
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-brass
                   ${isMe
-                    ? 'border-gold bg-gold/20'
+                    ? 'border-brass/70 bg-brass/15'
                     : seated
-                      ? 'border-white/10 bg-white/5'
-                      : 'border-white/10 bg-white/5 hover:border-gold/50 hover:bg-white/10'
+                      ? 'border-brass/15 bg-felt-rim/40'
+                      : 'border-brass/15 bg-felt-rim/30 hover:border-brass/50 hover:bg-felt-rim/55'
                   }
-                  ${!seated ? 'cursor-pointer' : ''}
-                `}
+                  ${isClickable ? 'cursor-pointer active:scale-[0.98]' : ''}`}
               >
-                <div className="text-xs text-white/40">{SEAT_LABELS[i]}</div>
+                <div className="font-display text-[10px] uppercase tracking-[0.22em] text-bone-dim/70">
+                  {SEAT_LABELS[i]}
+                </div>
                 {seated ? (
-                  <div className="flex items-center gap-2 mt-1">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
-                      ${isMe ? 'bg-gold text-black' : 'bg-white/20'}`}>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold
+                      brass-hairline shadow-md
+                      ${isMe ? 'bg-brass text-[hsl(220_18%_8%)]' : 'bg-felt-rim text-bone'}`}>
                       {seated.name[0].toUpperCase()}
                     </div>
-                    <div>
-                      <div className="text-sm font-medium">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-bone truncate">
                         {seated.name}
-                        {seated.isAdmin && <span className="text-gold ml-1 text-xs">★</span>}
+                        {seated.isAdmin && <span className="text-brass ml-1 text-xs">★</span>}
                       </div>
-                      <div className="text-xs text-white/50">{seated.chips.toLocaleString()} chips</div>
+                      <div className="text-[11px] text-bone-dim font-mono tabular-nums">
+                        {seated.chips.toLocaleString()}
+                      </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="text-white/30 text-sm mt-1">
+                  <div className="text-bone-dim/55 text-xs mt-1.5 italic">
                     {myCurrentSeat === undefined || myCurrentSeat === -1 ? 'Tap to sit' : 'Empty'}
                   </div>
                 )}
@@ -178,38 +214,37 @@ export default function LobbyScreen() {
         </div>
       </div>
 
-      {/* Start Button */}
-      {isAdmin && (
+      {/* Start / status */}
+      {isAdmin ? (
         <div className="mt-4">
-          <button
+          <Button
+            variant="raise"
+            size="xl"
+            className="w-full"
             onClick={handleStartGame}
             disabled={!canStart}
-            className="w-full py-4 bg-gold text-black font-bold rounded-xl text-lg
-                       hover:bg-gold/90 active:scale-95 transition-all disabled:opacity-50"
           >
             {canStart
-              ? `Deal Cards (${seatedPlayers.length} players)`
+              ? `Deal Cards · ${seatedPlayers.length} player${seatedPlayers.length !== 1 ? 's' : ''}`
               : 'Need at least 2 seated players'}
-          </button>
+          </Button>
+        </div>
+      ) : (
+        <div className="mt-4 text-center text-bone-dim text-xs uppercase tracking-[0.18em]">
+          Waiting for host…
         </div>
       )}
 
-      {!isAdmin && (
-        <div className="mt-4 text-center text-white/50 text-sm">
-          Waiting for host to start the game...
-        </div>
-      )}
-
-      <button
+      <Button
+        variant="ghost"
+        className="mt-3 w-full text-ember/70 hover:text-ember hover:bg-ember/10"
         onClick={() => {
           localStorage.removeItem('lazypoker_session');
           socket?.emit('action', { roomCode, playerId, action: { type: 'LEAVE_GAME' } });
         }}
-        className="mt-3 w-full py-2 text-red-400/70 text-sm border border-red-600/20 rounded-xl
-                   hover:text-red-300 hover:border-red-600/40 active:scale-95 transition-all"
       >
         Leave Game
-      </button>
+      </Button>
     </div>
   );
 }

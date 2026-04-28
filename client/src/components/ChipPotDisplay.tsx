@@ -35,19 +35,25 @@ function ChipPile({ amount }: { amount: number }) {
             {Array.from({ length: displayCount }).map((_, j) => (
               <div
                 key={j}
-                className="w-[22px] h-[22px] rounded-full border-2 border-white/25 flex items-center justify-center"
+                className="w-[22px] h-[22px] rounded-full flex items-center justify-center"
                 style={{
-                  backgroundColor: chipDef.color,
+                  background: `radial-gradient(circle at 30% 30%, ${chipDef.color}, color-mix(in oklab, ${chipDef.color} 65%, black))`,
                   marginTop: j > 0 ? '-14px' : 0,
                   zIndex: j,
+                  border: '1px solid rgba(255,255,255,0.22)',
                   boxShadow: j === displayCount - 1
-                    ? '0 3px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.2)'
-                    : '0 1px 2px rgba(0,0,0,0.3)',
+                    ? 'inset 0 1px 0 rgba(255,255,255,0.32), 0 4px 10px hsl(160 35% 6% / 0.55)'
+                    : 'inset 0 1px 0 rgba(255,255,255,0.22), 0 1px 2px rgba(0,0,0,0.4)',
                 }}
               >
                 {j === displayCount - 1 && (
-                  <span className={`text-[7px] font-bold
-                    ${denom >= 500 ? 'text-white' : denom <= 1 ? 'text-gray-600' : 'text-white'}`}>
+                  <span
+                    className="text-[7px] font-mono font-bold"
+                    style={{
+                      color: denom <= 1 ? 'rgba(40,40,40,0.95)' : 'rgba(255,255,255,0.95)',
+                      textShadow: 'inset 0 -1px 0 rgba(0,0,0,0.5)',
+                    }}
+                  >
                     {denom >= 1000 ? `${denom / 1000}K` : denom}
                   </span>
                 )}
@@ -62,20 +68,19 @@ function ChipPile({ amount }: { amount: number }) {
 
 export default function ChipPotDisplay({ pots, gameState }: ChipPotDisplayProps) {
   const totalPot = pots.reduce((sum, p) => sum + p.amount, 0);
-  const isActiveHand = ['PRE_FLOP', 'FLOP', 'TURN', 'RIVER'].includes(gameState.phase);
   const prevPotRef = useRef(totalPot);
   const [animating, setAnimating] = useState(false);
 
   useEffect(() => {
     if (totalPot > prevPotRef.current) {
       setAnimating(true);
+      prevPotRef.current = totalPot;
       const t = setTimeout(() => setAnimating(false), 400);
       return () => clearTimeout(t);
     }
     prevPotRef.current = totalPot;
   }, [totalPot]);
 
-  // Build action line
   const actionLine = useMemo(() => {
     if (!gameState.lastAction) return '';
     const actor = gameState.players.find(p => p.id === gameState.lastAction!.playerId);
@@ -92,7 +97,6 @@ export default function ChipPotDisplay({ pots, gameState }: ChipPotDisplayProps)
     return `${name}: ${action}`;
   }, [gameState.lastAction, gameState.players]);
 
-  // To-call context
   const activePlayer = gameState.activePlayerIndex >= 0
     ? gameState.players[gameState.activePlayerIndex]
     : null;
@@ -106,34 +110,37 @@ export default function ChipPotDisplay({ pots, gameState }: ChipPotDisplayProps)
   }
 
   return (
-    <div className="flex flex-col items-center gap-1">
-      {/* Phase label */}
-      <div className={`text-xs font-bold tracking-widest uppercase
-        ${gameState.phase === 'HAND_COMPLETE' ? 'text-gold' : 'text-white/60'}`}>
+    <div className="flex flex-col items-center gap-2">
+      <div className={`text-[10px] font-display italic tracking-[0.22em] uppercase
+        ${gameState.phase === 'HAND_COMPLETE' ? 'text-brass' : 'text-bone-dim/75'}`}>
         {PHASE_LABELS[gameState.phase] ?? gameState.phase}
       </div>
 
-      {/* Main pot display */}
-      <div className={`relative px-6 py-3 rounded-2xl transition-all
+      <div className={`relative rounded-[26px] px-6 py-4 transition-all
         ${totalPot > 0
-          ? 'bg-black/40 backdrop-blur-sm border border-gold/20 shadow-lg shadow-gold/5'
-          : 'bg-black/20 border border-white/5'}
+          ? 'surface-panel'
+          : 'surface-panel-soft'}
         ${animating ? 'animate-pot-grow' : ''}`}
       >
         {totalPot > 0 ? (
           <>
             <ChipPile amount={pots[0]?.amount ?? 0} />
-            <div className="text-center mt-1.5">
-              <span className="text-gold font-black text-xl tabular-nums">
+            <div className="mt-2 text-center">
+              <div className="mb-1 text-[9px] uppercase tracking-[0.3em] text-bone-dim">
+                Pot
+              </div>
+              <span className="font-display tabular-display brass-shimmer-text text-[30px] leading-none">
                 {totalPot.toLocaleString()}
               </span>
             </div>
-            {/* Side pots indicator */}
             {pots.length > 1 && (
-              <div className="flex gap-2 justify-center mt-1">
+              <div className="mt-2 flex justify-center gap-2 pt-2 brass-hairline-t">
                 {pots.slice(1).map((pot, i) => (
                   pot.amount > 0 && (
-                    <span key={i} className="text-[9px] bg-white/10 px-1.5 py-0.5 rounded-full text-white/50 tabular-nums">
+                    <span
+                      key={i}
+                      className="rounded-full border border-bone/10 bg-panel-soft/70 px-2 py-0.5 text-[9px] font-mono tabular-nums text-bone-dim"
+                    >
                       Side: {pot.amount.toLocaleString()}
                     </span>
                   )
@@ -142,20 +149,18 @@ export default function ChipPotDisplay({ pots, gameState }: ChipPotDisplayProps)
             )}
           </>
         ) : (
-          <div className="text-white/20 text-sm py-2 px-4">No pot</div>
+          <div className="px-5 py-2 text-xs italic text-bone-dim/50 font-display">No pot</div>
         )}
       </div>
 
-      {/* Action line */}
       {actionLine && (
-        <div className="text-[11px] text-white/50 animate-fade-in mt-0.5 text-center max-w-[250px]">
+        <div className="mt-0.5 max-w-[280px] text-center text-[11px] text-bone-dim/85 animate-fade-in">
           {actionLine}
         </div>
       )}
 
-      {/* Context line */}
       {contextLine && (
-        <div className="text-[10px] text-white/35">
+        <div className="rounded-full border border-bone/8 bg-panel-strong/45 px-2.5 py-0.5 text-[10px] font-mono tabular-nums text-bone-dim/70">
           {contextLine}
         </div>
       )}

@@ -9,15 +9,22 @@ export default function CommunityCards({ cards }: CommunityCardsProps) {
   if (cards.length === 0) return null;
 
   return (
-    <div className="flex gap-1.5 justify-center">
+    <div className="flex justify-center gap-2">
       {cards.map((card, i) => (
-        <div key={i} className="animate-fade-in" style={{ animationDelay: `${i * 100}ms` }}>
+        <div
+          key={i}
+          className="animate-card-lift"
+          style={{ animationDelay: `${i * 80}ms` }}
+        >
           <Card card={card} size="md" />
         </div>
       ))}
-      {/* Placeholder slots for remaining cards */}
       {Array.from({ length: 5 - cards.length }, (_, i) => (
-        <div key={`empty-${i}`} className="w-12 h-[68px] rounded-lg border border-white/10" />
+        <div
+          key={`empty-${i}`}
+          className="surface-panel-soft rounded-lg border-dashed border-bone/10"
+          style={{ width: 48, height: 67 }}
+        />
       ))}
     </div>
   );

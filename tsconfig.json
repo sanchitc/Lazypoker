@@ -12,7 +12,8 @@
     "isolatedModules": true,
     "noEmit": true,
     "paths": {
-      "@common/*": ["./common/*"]
+      "@common/*": ["./common/*"],
+      "@/*": ["./client/src/*"]
     }
   },
   "include": ["client/src", "common"]

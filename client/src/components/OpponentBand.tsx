@@ -1,5 +1,6 @@
 import { Player, GameState } from '@common/types';
 import { CHIP_COLORS } from '@common/constants';
+import { Badge } from '@/components/ui/badge';
 
 interface OpponentBandProps {
   opponents: Player[];
@@ -20,36 +21,37 @@ function getPositionBadge(player: Player, gameState: GameState): string | null {
   return null;
 }
 
-function getStatusInfo(player: Player, gameState: GameState): { text: string; bg: string } | null {
-  if (player.isFolded) return { text: 'FOLD', bg: 'bg-white/10 text-white/30' };
-  if (player.isAllIn) return { text: 'ALL IN', bg: 'bg-yellow-500/90 text-black' };
+function getStatusBadge(player: Player, gameState: GameState):
+  | { text: string; variant: 'brass' | 'ember' | 'ivy' | 'muted' }
+  | null {
+  if (player.isFolded) return { text: 'FOLD', variant: 'muted' };
+  if (player.isAllIn) return { text: 'ALL IN', variant: 'brass' };
 
   const isActing = gameState.players[gameState.activePlayerIndex]?.id === player.id;
-  if (isActing) return { text: 'TURN', bg: 'bg-blue-500 text-white' };
+  if (isActing) return { text: 'TURN', variant: 'brass' };
 
   if (gameState.lastAction?.playerId === player.id) {
     const action = gameState.lastAction.action.toLowerCase();
-    if (action.includes('check')) return { text: 'CHECK', bg: 'bg-green-500/30 text-green-300' };
-    if (action.includes('call')) return { text: 'CALL', bg: 'bg-green-500/30 text-green-300' };
-    if (action.includes('raise')) return { text: 'RAISE', bg: 'bg-gold/40 text-gold' };
-    if (action.includes('bet')) return { text: 'BET', bg: 'bg-gold/40 text-gold' };
+    if (action.includes('check')) return { text: 'CHECK', variant: 'ivy' };
+    if (action.includes('call')) return { text: 'CALL', variant: 'ivy' };
+    if (action.includes('raise')) return { text: 'RAISE', variant: 'brass' };
+    if (action.includes('bet')) return { text: 'BET', variant: 'brass' };
   }
 
   return null;
 }
 
-export default function OpponentBand({ opponents, gameState, currentPlayerId }: OpponentBandProps) {
+export default function OpponentBand({ opponents, gameState, currentPlayerId: _currentPlayerId }: OpponentBandProps) {
   if (opponents.length === 0) return null;
 
   return (
-    <div className="flex gap-1.5 px-2 py-1.5 overflow-x-auto scrollbar-hide justify-center">
+    <div className="flex justify-center gap-2 overflow-x-auto px-3 py-2 scrollbar-hide bg-ink/24 backdrop-blur-sm brass-hairline-b">
       {opponents.map(player => {
         const isActing = gameState.players[gameState.activePlayerIndex]?.id === player.id;
-        const status = getStatusInfo(player, gameState);
+        const status = getStatusBadge(player, gameState);
         const position = getPositionBadge(player, gameState);
         const isFolded = player.isFolded;
 
-        // Chip color indicator based on stack size
         const chipColor = CHIP_COLORS.reduce((best, chip) =>
           player.chips >= chip.value ? chip : best
         , CHIP_COLORS[0]);
@@ -57,42 +59,42 @@ export default function OpponentBand({ opponents, gameState, currentPlayerId }: 
         return (
           <div
             key={player.id}
-            className={`flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-full
-              transition-all duration-200 min-w-0
+            className={`flex min-w-0 flex-shrink-0 items-center gap-2 rounded-full px-2.5 py-1.5
+              transition-all duration-200
               ${isFolded ? 'opacity-35' : ''}
               ${isActing
-                ? 'bg-blue-500/20 ring-2 ring-blue-400/70 ring-pulse'
-                : 'bg-white/8 border border-white/10'}`}
+                ? 'surface-panel ring-1 ring-brass/30 ring-pulse shadow-[0_0_18px_-8px_hsl(var(--brass)/0.55)]'
+                : 'surface-panel-soft'}`}
           >
-            {/* Avatar */}
             <div className="relative flex-shrink-0">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold
-                border shadow-md shadow-black/40
-                bg-slate-800 text-white border-white/30
-                ${isActing ? 'ring-2 ring-blue-400' : ''}`}
+              <div
+                className={`flex h-8 w-8 items-center justify-center rounded-full border text-[11px] font-bold shadow-md shadow-ink/40
+                  ${isActing
+                    ? 'border-brass/42 bg-gradient-to-b from-felt-rim to-panel-strong text-bone'
+                    : 'border-bone/10 bg-gradient-to-b from-panel-soft to-panel-strong text-bone'}`}
               >
                 {player.name[0].toUpperCase()}
               </div>
               {position && (
-                <div className="absolute -top-1 -right-1.5 w-3.5 h-3.5 bg-white text-black rounded-full
-                                text-[7px] font-bold flex items-center justify-center shadow-sm">
-                  {position}
+                <div className="absolute -top-1 -right-1.5">
+                  <Badge variant="brass" className="px-1 py-0 text-[7px] h-3.5 tracking-tight">
+                    {position}
+                  </Badge>
                 </div>
               )}
             </div>
 
-            {/* Name + Stack */}
             <div className="flex flex-col min-w-0 leading-tight">
-              <span className="text-[10px] font-medium truncate max-w-[50px]">
+              <span className="max-w-[68px] truncate text-[10px] font-medium text-bone">
                 {player.name}
-                {player.isAdmin && <span className="text-gold ml-0.5">*</span>}
+                {player.isAdmin && <span className="text-brass ml-0.5">*</span>}
               </span>
               <div className="flex items-center gap-0.5">
                 <div
-                  className="w-2 h-2 rounded-full flex-shrink-0"
+                  className="w-2 h-2 rounded-full flex-shrink-0 border border-bone/20"
                   style={{ backgroundColor: chipColor.color }}
                 />
-                <span className="text-[10px] font-bold tabular-nums text-white/60">
+                <span className="text-[10px] font-mono font-semibold tabular-nums text-bone-dim">
                   {player.chips >= 1000
                     ? `${(player.chips / 1000).toFixed(player.chips % 1000 === 0 ? 0 : 1)}k`
                     : player.chips.toLocaleString()}
@@ -100,18 +102,16 @@ export default function OpponentBand({ opponents, gameState, currentPlayerId }: 
               </div>
             </div>
 
-            {/* Current bet badge */}
             {player.currentBet > 0 && !isFolded && (
-              <div className="text-[9px] font-bold tabular-nums text-gold bg-gold/15 px-1.5 py-0.5 rounded-full">
+              <div className="rounded-full border border-brass/22 bg-brass/10 px-2 py-0.5 text-[9px] font-mono font-bold tabular-nums text-brass">
                 {player.currentBet.toLocaleString()}
               </div>
             )}
 
-            {/* Status badge */}
             {status && (
-              <div className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap ${status.bg}`}>
+              <Badge variant={status.variant} className="text-[8px] tracking-tight">
                 {status.text}
-              </div>
+              </Badge>
             )}
           </div>
         );

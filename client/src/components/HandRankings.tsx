@@ -1,4 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Button } from '@/components/ui/button';
 
 const HAND_RANKINGS = [
   { rank: 1, name: 'Royal Flush', example: 'A♠K♠Q♠J♠T♠' },
@@ -17,15 +26,11 @@ const STORAGE_KEY = 'lazypoker_rankings_hidden';
 
 function ExampleHand({ text }: { text: string }) {
   return (
-    <span className="font-mono text-[13px] leading-none tracking-tight whitespace-nowrap">
+    <span className="font-mono text-[12px] tracking-tight whitespace-nowrap">
       {[...text].map((c, i) => {
         const red = c === '♥' || c === '♦';
-        const black = c === '♣' || c === '♠';
         return (
-          <span
-            key={i}
-            className={red ? 'text-red-400' : black ? 'text-white/95' : 'text-white/70'}
-          >
+          <span key={i} className={red ? 'text-ember' : 'text-bone'}>
             {c}
           </span>
         );
@@ -41,38 +46,17 @@ export default function HandRankings() {
     return localStorage.getItem(STORAGE_KEY) === '1';
   });
 
-  const panelRef = useRef<HTMLDivElement | null>(null);
-  const buttonRef = useRef<HTMLButtonElement | null>(null);
-
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, hidden ? '1' : '0');
   }, [hidden]);
-
-  // Close panel when tapping outside, but let the underlying tap pass through
-  // so action buttons remain operable while the panel is open.
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: Event) => {
-      const target = e.target as Node;
-      if (panelRef.current?.contains(target)) return;
-      if (buttonRef.current?.contains(target)) return;
-      setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    document.addEventListener('touchstart', handler);
-    return () => {
-      document.removeEventListener('mousedown', handler);
-      document.removeEventListener('touchstart', handler);
-    };
-  }, [open]);
 
   if (hidden) {
     return (
       <button
         onClick={() => setHidden(false)}
         className="fixed right-0 top-1/2 -translate-y-1/2 z-30
-                   w-2 h-14 bg-gold/30 hover:bg-gold/60
-                   rounded-l-full border border-gold/40 border-r-0
+                   h-14 w-2 rounded-l-full border border-brass/32 border-r-0
+                   bg-panel-strong/85 hover:bg-panel
                    transition-all"
         aria-label="Show hand rankings button"
         title="Show hand rankings"
@@ -83,77 +67,60 @@ export default function HandRankings() {
   return (
     <>
       <button
-        ref={buttonRef}
-        onClick={() => setOpen(o => !o)}
-        className={`fixed right-2 top-1/2 -translate-y-1/2 z-40
-                    w-10 h-10 rounded-full backdrop-blur-md
-                    border shadow-lg flex items-center justify-center
-                    leading-none active:scale-95 transition-all
-                    ${open
-                      ? 'bg-gold/40 border-gold/70 text-white'
-                      : 'bg-black/40 border-gold/40 text-gold hover:bg-black/55'}`}
+        onClick={() => setOpen(true)}
+        className="fixed right-2 top-1/2 -translate-y-1/2 z-40
+                   flex h-11 w-11 items-center justify-center rounded-full border border-brass/20
+                   bg-panel-strong/78 text-brass backdrop-blur-md hover:border-brass/34 hover:bg-panel
+                   shadow-lg flex items-center justify-center
+                   focus:outline-none focus-visible:ring-2 focus-visible:ring-brass
+                   active:scale-95 transition-all"
         aria-label="Hand rankings"
         title="Hand rankings"
       >
         <span className="text-[15px] font-bold tracking-tighter">
-          <span className="text-red-400">♥</span>
-          <span>♠</span>
+          <span className="text-ember">♥</span>
+          <span className="text-bone">♠</span>
         </span>
       </button>
 
-      {open && (
-        <div
-          ref={panelRef}
-          className="fixed right-2 z-40 animate-slide-up
-                     top-12
-                     w-[min(290px,calc(100vw-16px))]
-                     max-h-[calc(100vh-220px)]
-                     bg-felt-dark/95 backdrop-blur-xl rounded-2xl
-                     border border-gold/30 shadow-2xl
-                     flex flex-col overflow-hidden"
-        >
-          <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 bg-black/30">
-            <span className="text-gold text-sm font-bold tracking-wide uppercase">
-              Hand Rankings
-            </span>
-            <button
-              onClick={() => setOpen(false)}
-              className="w-7 h-7 rounded-full text-white/70 hover:text-white hover:bg-white/10
-                         flex items-center justify-center text-xl leading-none"
-              aria-label="Close"
-            >
-              ×
-            </button>
-          </div>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="right" className="w-[min(320px,calc(100vw-16px))] felt-noise flex flex-col">
+          <SheetHeader>
+            <SheetTitle>Hand Rankings</SheetTitle>
+            <SheetDescription>Best to worst — Texas Hold'em.</SheetDescription>
+          </SheetHeader>
 
-          <div className="flex-1 overflow-y-auto px-1 py-1">
-            {HAND_RANKINGS.map(h => (
-              <div
-                key={h.rank}
-                className="flex items-center gap-2 px-2 py-2 rounded-lg"
-              >
-                <span className="w-5 text-xs text-gold/70 tabular-nums text-right font-bold">
-                  {h.rank}
-                </span>
-                <span className="flex-1 text-sm text-white/90 font-medium leading-tight">
-                  {h.name}
-                </span>
-                <ExampleHand text={h.example} />
-              </div>
-            ))}
-          </div>
+          <ScrollArea className="flex-1 -mx-2">
+            <div className="px-2">
+              {HAND_RANKINGS.map(h => (
+                <div
+                  key={h.rank}
+                  className="flex items-center gap-3 px-2 py-2.5 rounded-sm hover:bg-bone/5"
+                >
+                  <span className="font-display text-base text-brass tabular-nums w-5 text-right">
+                    {h.rank}
+                  </span>
+                  <span className="font-display text-sm text-bone flex-1 leading-tight">
+                    {h.name}
+                  </span>
+                  <ExampleHand text={h.example} />
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
 
-          <div className="px-3 py-2 border-t border-white/10 bg-black/20 flex items-center justify-between">
-            <button
+          <div className="pt-3 mt-2 brass-hairline-t flex items-center justify-between">
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => { setHidden(true); setOpen(false); }}
-              className="text-[11px] text-white/50 hover:text-white/80 underline-offset-2 hover:underline"
             >
               Hide button
-            </button>
-            <span className="text-[10px] text-white/40">tap outside to dismiss</span>
+            </Button>
+            <span className="text-[10px] text-bone-dim/70">tap outside to dismiss</span>
           </div>
-        </div>
-      )}
+        </SheetContent>
+      </Sheet>
     </>
   );
 }

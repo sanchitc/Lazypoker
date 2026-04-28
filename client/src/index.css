@@ -1,171 +1,371 @@
+@import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..900;1,6..96,400..900&family=Albert+Sans:ital,wght@0,300..800;1,300..800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-* {
-  -webkit-tap-highlight-color: transparent;
+@layer base {
+  :root {
+    /* Refined casino palette: fewer competing greens, warmer metal, darker control rails */
+    --felt:        154 45% 18%;
+    --felt-deep:   204 29% 6%;
+    --felt-rim:    153 35% 24%;
+    --panel:       153 24% 15%;
+    --panel-soft:  153 20% 20%;
+    --panel-strong: 206 23% 10%;
+    --ink:         206 25% 5%;
+    --bone:        36 28% 92%;
+    --bone-dim:    36 17% 72%;
+    --brass:       39 54% 65%;
+    --brass-deep:  36 42% 43%;
+    --ember:       10 70% 58%;
+    --velvet:      228 24% 18%;
+    --ivy:         151 30% 34%;
+    --obsidian:    214 19% 12%;
+    --card-face:   35 32% 94%;
+    --card-shadow: 34 20% 86%;
+    --suit-dark:   214 19% 14%;
+    --suit-red:    8 58% 48%;
+
+    /* shadcn semantic mapping (dark by default) */
+    --background:            var(--felt-deep);
+    --foreground:            var(--bone);
+    --card:                  var(--panel);
+    --card-foreground:       var(--bone);
+    --popover:               var(--ink);
+    --popover-foreground:    var(--bone);
+    --primary:               var(--brass);
+    --primary-foreground:    220 18% 8%;
+    --secondary:             var(--panel-soft);
+    --secondary-foreground:  var(--bone);
+    --muted:                 var(--panel);
+    --muted-foreground:      var(--bone-dim);
+    --accent:                var(--brass-deep);
+    --accent-foreground:     var(--bone);
+    --destructive:           var(--ember);
+    --destructive-foreground: 38 30% 95%;
+    --border:                39 24% 56% / 0.16;
+    --input:                 39 24% 56% / 0.2;
+    --ring:                  var(--brass);
+
+    --radius: 0.5rem;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+    border-color: hsl(var(--border));
+  }
+
+  html, body {
+    background:
+      radial-gradient(circle at 50% -10%, hsl(var(--felt-rim) / 0.18), transparent 32%),
+      radial-gradient(circle at 50% 120%, hsl(var(--brass-deep) / 0.08), transparent 30%),
+      linear-gradient(180deg, hsl(var(--ink)) 0%, hsl(var(--felt-deep)) 58%, hsl(206 35% 4%) 100%);
+    color: hsl(var(--bone));
+    font-family: 'Albert Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-feature-settings: 'ss01', 'cv11';
+    overscroll-behavior: none;
+  }
+
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  overscroll-behavior: none;
+@layer components {
+  /* Subtle SVG noise overlay for felt surfaces — sells the texture */
+  .felt-noise {
+    position: relative;
+    isolation: isolate;
+  }
+  .felt-noise::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.05;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.85  0 0 0 0 0.78  0 0 0 0 0.62  0 0 0 0.7 0'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>");
+    background-size: 200px 200px;
+  }
+  .felt-noise > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Page-edge vignette */
+  .vignette {
+    position: relative;
+  }
+  .vignette::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(
+      ellipse at center,
+      transparent 52%,
+      hsl(var(--ink) / 0.54) 100%
+    );
+  }
+
+  .game-shell {
+    background:
+      radial-gradient(circle at 50% -12%, hsl(var(--felt-rim) / 0.22), transparent 34%),
+      radial-gradient(circle at 50% 110%, hsl(var(--brass-deep) / 0.08), transparent 28%),
+      linear-gradient(180deg, hsl(var(--ink)) 0%, hsl(var(--felt-deep)) 55%, hsl(206 34% 4%) 100%);
+  }
+
+  .surface-panel {
+    background: linear-gradient(
+      180deg,
+      hsl(var(--panel-soft) / 0.88),
+      hsl(var(--panel) / 0.94) 45%,
+      hsl(var(--panel-strong) / 0.96) 100%
+    );
+    border: 1px solid hsl(var(--brass) / 0.14);
+    box-shadow:
+      inset 0 1px 0 hsl(var(--bone) / 0.04),
+      0 18px 38px -30px hsl(var(--ink) / 0.95);
+    backdrop-filter: blur(12px);
+  }
+
+  .surface-panel-soft {
+    background: linear-gradient(
+      180deg,
+      hsl(var(--panel-soft) / 0.72),
+      hsl(var(--panel) / 0.8)
+    );
+    border: 1px solid hsl(var(--bone) / 0.08);
+    box-shadow:
+      inset 0 1px 0 hsl(var(--bone) / 0.03),
+      0 14px 28px -24px hsl(var(--ink) / 0.92);
+    backdrop-filter: blur(10px);
+  }
+
+  .surface-pill {
+    background: linear-gradient(
+      180deg,
+      hsl(var(--panel-soft) / 0.82),
+      hsl(var(--panel-strong) / 0.9)
+    );
+    border: 1px solid hsl(var(--brass) / 0.14);
+    box-shadow:
+      inset 0 1px 0 hsl(var(--bone) / 0.04),
+      0 12px 24px -20px hsl(var(--ink) / 0.94);
+    backdrop-filter: blur(10px);
+  }
+
+  .control-rail {
+    background: linear-gradient(
+      180deg,
+      hsl(var(--panel-strong) / 0.96),
+      hsl(var(--ink) / 0.98)
+    );
+    border-top: 1px solid hsl(var(--brass) / 0.14);
+    box-shadow: 0 -22px 40px -34px hsl(var(--ink) / 0.96);
+  }
+
+  .table-shell {
+    background: linear-gradient(
+      180deg,
+      hsl(39 42% 58%) 0%,
+      hsl(var(--brass-deep)) 42%,
+      hsl(32 34% 24%) 100%
+    );
+    box-shadow:
+      0 34px 72px -30px hsl(var(--ink) / 0.98),
+      0 10px 24px -8px hsl(30 44% 18% / 0.56);
+  }
+
+  .table-felt {
+    background:
+      radial-gradient(circle at 50% 42%, hsl(151 56% 25%) 0%, hsl(var(--felt)) 38%, hsl(var(--felt-rim)) 72%, hsl(154 43% 13%) 100%);
+    border: 1px solid hsl(var(--bone) / 0.05);
+    box-shadow:
+      inset 0 0 88px hsl(var(--ink) / 0.34),
+      inset 0 -28px 48px hsl(var(--ink) / 0.3);
+  }
+
+  .table-spotlight {
+    background: radial-gradient(circle at 50% 45%, hsl(var(--bone) / 0.05), transparent 72%);
+    filter: blur(2px);
+  }
+
+  /* Brass hairline border */
+  .brass-hairline {
+    border: 1px solid hsl(var(--brass) / 0.22);
+  }
+  .brass-hairline-b {
+    border-bottom: 1px solid hsl(var(--brass) / 0.16);
+  }
+  .brass-hairline-t {
+    border-top: 1px solid hsl(var(--brass) / 0.16);
+  }
+
+  /* Bodoni tabular numerals — for stack/pot totals */
+  .tabular-display {
+    font-family: 'Bodoni Moda', Georgia, serif;
+    font-feature-settings: 'tnum' 1, 'lnum' 1;
+    letter-spacing: -0.01em;
+  }
+
+  /* Brass shimmer text — pot total / Award Pot */
+  .brass-shimmer-text {
+    background: linear-gradient(
+      100deg,
+      hsl(var(--brass-deep)) 10%,
+      hsl(var(--brass)) 30%,
+      hsl(40 80% 78%) 50%,
+      hsl(var(--brass)) 70%,
+      hsl(var(--brass-deep)) 90%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    animation: brassShimmer 3.6s ease-in-out infinite;
+  }
+
+  /* Brass-themed scrollbar */
+  .scrollbar-brass {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--brass) / 0.4) transparent;
+  }
+  .scrollbar-brass::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-brass::-webkit-scrollbar-thumb {
+    background: hsl(var(--brass) / 0.35);
+    border-radius: 3px;
+  }
+  .scrollbar-brass::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--brass) / 0.6);
+  }
+
+  /* Hide scrollbar (legacy used in OpponentBand) */
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+  /* Card flip */
+  .card-flip { perspective: 600px; }
+  .card-flip-inner { transition: transform 0.6s; transform-style: preserve-3d; }
+  .card-flip-inner.flipped { transform: rotateY(180deg); }
+  .card-front, .card-back { backface-visibility: hidden; }
+  .card-back { transform: rotateY(180deg); }
+
+  /* Ember active-player glow (replaces gold ring) */
+  .active-glow {
+    animation: activeGlow 2s ease-in-out infinite;
+  }
 }
 
-/* Card flip animation */
-.card-flip {
-  perspective: 600px;
-}
-.card-flip-inner {
-  transition: transform 0.6s;
-  transform-style: preserve-3d;
-}
-.card-flip-inner.flipped {
-  transform: rotateY(180deg);
-}
-.card-front, .card-back {
-  backface-visibility: hidden;
-}
-.card-back {
-  transform: rotateY(180deg);
+/* ===== Keyframes preserved verbatim ===== */
+@keyframes activeGlow {
+  0%, 100% { box-shadow: 0 0 10px 1px hsl(var(--brass) / 0.3); }
+  50%      { box-shadow: 0 0 22px 5px hsl(var(--brass) / 0.55); }
 }
 
-/* Chip slide animation */
 @keyframes chipSlide {
   from { transform: translateY(0); opacity: 1; }
-  to { transform: translateY(-40px); opacity: 0; }
+  to   { transform: translateY(-40px); opacity: 0; }
 }
-.chip-slide {
-  animation: chipSlide 0.5s ease-out forwards;
-}
+.chip-slide { animation: chipSlide 0.5s ease-out forwards; }
 
-/* Active player glow */
-@keyframes activeGlow {
-  0%, 100% { box-shadow: 0 0 8px 2px rgba(212, 168, 67, 0.4); }
-  50% { box-shadow: 0 0 16px 4px rgba(212, 168, 67, 0.8); }
-}
-.active-glow {
-  animation: activeGlow 2s ease-in-out infinite;
-}
-
-/* Pot pulse */
 @keyframes potPulse {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
+  50%      { transform: scale(1.05); }
 }
-.pot-pulse {
-  animation: potPulse 0.5s ease-in-out;
-}
+.pot-pulse { animation: potPulse 0.5s ease-in-out; }
 
-/* Chip add to pending animation */
 @keyframes chipAdd {
-  0% { transform: scale(0.6) translateY(8px); opacity: 0; }
-  60% { transform: scale(1.1) translateY(-2px); opacity: 1; }
+  0%   { transform: scale(0.6) translateY(8px); opacity: 0; }
+  60%  { transform: scale(1.1) translateY(-2px); opacity: 1; }
   100% { transform: scale(1) translateY(0); opacity: 1; }
 }
-.chip-add {
-  animation: chipAdd 0.2s ease-out;
-}
+.chip-add { animation: chipAdd 0.2s ease-out; }
 
-/* Commit chips to pot */
 @keyframes commitToPot {
-  0% { transform: translateY(0) scale(1); opacity: 1; }
+  0%   { transform: translateY(0) scale(1); opacity: 1; }
   100% { transform: translateY(-60px) scale(0.5); opacity: 0; }
 }
-.commit-to-pot {
-  animation: commitToPot 0.4s ease-in forwards;
-}
+.commit-to-pot { animation: commitToPot 0.4s ease-in forwards; }
 
-/* Stack number smooth transition */
-.stack-number {
-  transition: all 0.3s ease-out;
-}
+.stack-number { transition: all 0.3s ease-out; }
 
-/* Hide scrollbar for opponent band */
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-/* ===== Chip-Only Mode Revamp Animations ===== */
-
-/* Chip toss toward pot */
 @keyframes chipToss {
-  0% { transform: translateY(0) scale(1); opacity: 1; }
-  40% { transform: translateY(-80px) scale(0.9) rotate(15deg); opacity: 1; }
+  0%   { transform: translateY(0) scale(1); opacity: 1; }
+  40%  { transform: translateY(-80px) scale(0.9) rotate(15deg); opacity: 1; }
   100% { transform: translateY(-120px) scale(0.4) rotate(30deg); opacity: 0; }
 }
-.chip-toss {
-  animation: chipToss 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
-}
+.chip-toss { animation: chipToss 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) forwards; }
 
-/* Pot grow when chips land */
 @keyframes potGrow {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.12); }
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.12); }
   100% { transform: scale(1); }
 }
-.pot-grow {
-  animation: potGrow 0.4s ease-out;
-}
+.pot-grow { animation: potGrow 0.4s ease-out; }
 
-/* Player acting ring pulse */
 @keyframes ringPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5); }
-  50% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--brass) / 0.55); }
+  50%      { box-shadow: 0 0 0 6px hsl(var(--brass) / 0); }
 }
-.ring-pulse {
-  animation: ringPulse 1.5s ease-in-out infinite;
-}
+.ring-pulse { animation: ringPulse 1.5s ease-in-out infinite; }
 
-/* Slide in from bottom */
 @keyframes slideInUp {
-  0% { transform: translateY(100%); opacity: 0; }
+  0%   { transform: translateY(100%); opacity: 0; }
   100% { transform: translateY(0); opacity: 1; }
 }
-.slide-in-up {
-  animation: slideInUp 0.3s ease-out;
-}
+.slide-in-up { animation: slideInUp 0.3s ease-out; }
 
-/* Scale pop for buttons */
 @keyframes scalePop {
-  0% { transform: scale(0.9); opacity: 0; }
-  70% { transform: scale(1.03); }
+  0%   { transform: scale(0.9); opacity: 0; }
+  70%  { transform: scale(1.03); }
   100% { transform: scale(1); opacity: 1; }
 }
-.scale-pop {
-  animation: scalePop 0.25s ease-out;
-}
+.scale-pop { animation: scalePop 0.25s ease-out; }
 
-/* Shimmer for award pot confirmation */
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
 }
 .shimmer {
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 50%, transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, hsl(var(--brass) / 0.18) 50%, transparent 100%);
   background-size: 200% 100%;
   animation: shimmer 2s infinite;
 }
 
-/* Subtle breathing for waiting state */
-@keyframes breathe {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 0.8; }
-}
-.breathe {
-  animation: breathe 2s ease-in-out infinite;
+@keyframes brassShimmer {
+  0%, 100% { background-position: -100% 50%; }
+  50%      { background-position:  200% 50%; }
 }
 
-/* Chip wobble on hover/touch */
+@keyframes feltDrift {
+  0%, 100% { transform: translate3d(0,0,0); }
+  50%      { transform: translate3d(-1.5%, -0.6%, 0); }
+}
+
+@keyframes cardLift {
+  0%   { transform: translateY(6px); opacity: 0; }
+  60%  { transform: translateY(-1px); opacity: 1; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 0.8; }
+}
+.breathe { animation: breathe 2s ease-in-out infinite; }
+
 @keyframes chipWobble {
-  0% { transform: rotate(0deg); }
-  25% { transform: rotate(-3deg); }
-  75% { transform: rotate(3deg); }
+  0%   { transform: rotate(0deg); }
+  25%  { transform: rotate(-3deg); }
+  75%  { transform: rotate(3deg); }
   100% { transform: rotate(0deg); }
 }
-.chip-wobble:active {
-  animation: chipWobble 0.15s ease-in-out;
-}
+.chip-wobble:active { animation: chipWobble 0.15s ease-in-out; }

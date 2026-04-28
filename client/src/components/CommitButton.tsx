@@ -1,4 +1,5 @@
 import type { InferredAction } from '../hooks/useChipInteraction';
+import { Button, type ButtonProps } from '@/components/ui/button';
 
 interface CommitButtonProps {
   inferredAction: InferredAction;
@@ -7,29 +8,26 @@ interface CommitButtonProps {
   disabled: boolean;
 }
 
-function getButtonConfig(action: InferredAction): { label: string; bgClass: string; textClass: string } {
+function getButtonConfig(action: InferredAction): { label: string; variant: ButtonProps['variant'] } {
   switch (action.type) {
-    case 'CHECK':
-      return { label: 'Check', bgClass: 'bg-green-600 hover:bg-green-500', textClass: 'text-white' };
-    case 'CALL':
-      return { label: `Call ${action.amount.toLocaleString()}`, bgClass: 'bg-green-600 hover:bg-green-500', textClass: 'text-white' };
-    case 'BET':
-      return { label: `Bet ${action.amount.toLocaleString()}`, bgClass: 'bg-gold hover:bg-yellow-400', textClass: 'text-black' };
-    case 'RAISE':
-      return { label: `Raise to ${action.amount.toLocaleString()}`, bgClass: 'bg-gold hover:bg-yellow-400', textClass: 'text-black' };
-    case 'ALL_IN':
-      return { label: `ALL IN ${action.amount.toLocaleString()}`, bgClass: 'bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400', textClass: 'text-black' };
-    case 'INVALID':
-      return { label: action.reason, bgClass: 'bg-white/10', textClass: 'text-white/30' };
+    case 'CHECK': return { label: 'Check', variant: 'check' };
+    case 'CALL': return { label: `Call ${action.amount.toLocaleString()}`, variant: 'call' };
+    case 'BET': return { label: `Bet ${action.amount.toLocaleString()}`, variant: 'raise' };
+    case 'RAISE': return { label: `Raise to ${action.amount.toLocaleString()}`, variant: 'raise' };
+    case 'ALL_IN': return { label: `All In ${action.amount.toLocaleString()}`, variant: 'allin' };
+    case 'INVALID': return { label: action.reason, variant: 'outline' };
   }
 }
 
 export default function CommitButton({ inferredAction, canCommit, onCommit, disabled }: CommitButtonProps) {
-  const { label, bgClass, textClass } = getButtonConfig(inferredAction);
+  const { label, variant } = getButtonConfig(inferredAction);
   const isDisabled = disabled || !canCommit;
 
   return (
-    <button
+    <Button
+      variant={variant}
+      size="lg"
+      className="w-full uppercase tracking-[0.04em] font-bold"
       disabled={isDisabled}
       onClick={() => {
         if (!isDisabled) {
@@ -39,14 +37,9 @@ export default function CommitButton({ inferredAction, canCommit, onCommit, disa
           onCommit();
         }
       }}
-      className={`w-full py-3 rounded-xl font-black text-sm tracking-wide transition-all uppercase
-        ${isDisabled
-          ? 'bg-white/8 text-white/25 cursor-default'
-          : `${bgClass} ${textClass} active:scale-[0.97] shadow-lg`
-        }`}
       aria-label={label}
     >
       {label}
-    </button>
+    </Button>
   );
 }

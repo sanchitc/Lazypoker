@@ -2,6 +2,13 @@ import { useState, useEffect } from 'react';
 import { useSocket } from '../context/SocketContext';
 import { useGame } from '../context/GameContext';
 import { GameMode } from '@common/types';
+import { getPlayerKey } from '@/lib/playerKey';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent } from '@/components/ui/card';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import StatsScreen from './StatsScreen';
 
 export default function JoinScreen() {
   const { socket, connected, serverUrl, setServerUrl } = useSocket();
@@ -9,12 +16,11 @@ export default function JoinScreen() {
   const [name, setName] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [mode, setMode] = useState<GameMode>('chip-only');
-  const [view, setView] = useState<'home' | 'join' | 'create'>('home');
+  const [view, setView] = useState<'home' | 'join' | 'create' | 'stats'>('home');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [serverInput, setServerInput] = useState('');
 
-  // Check URL for room code
   useEffect(() => {
     const path = window.location.pathname.slice(1).toUpperCase();
     if (path && path.length === 4) {
@@ -23,7 +29,6 @@ export default function JoinScreen() {
     }
   }, []);
 
-  // Try to reconnect from saved session
   useEffect(() => {
     if (!socket || !connected) return;
     const saved = localStorage.getItem('lazypoker_session');
@@ -47,7 +52,7 @@ export default function JoinScreen() {
     if (!socket || !name.trim()) return;
     setLoading(true);
     setError('');
-    socket.emit('create', { playerName: name.trim(), mode }, (response) => {
+    socket.emit('create', { playerName: name.trim(), mode, playerKey: getPlayerKey() }, (response) => {
       setLoading(false);
       dispatch({ type: 'SET_PLAYER', playerId: response.playerId, roomCode: response.roomCode });
       window.history.pushState(null, '', `/${response.roomCode}`);
@@ -58,7 +63,7 @@ export default function JoinScreen() {
     if (!socket || !name.trim() || !roomCode.trim()) return;
     setLoading(true);
     setError('');
-    socket.emit('join', { playerName: name.trim(), roomCode: roomCode.toUpperCase() }, (response) => {
+    socket.emit('join', { playerName: name.trim(), roomCode: roomCode.toUpperCase(), playerKey: getPlayerKey() }, (response) => {
       setLoading(false);
       if (response.success && response.playerId) {
         dispatch({ type: 'SET_PLAYER', playerId: response.playerId, roomCode: roomCode.toUpperCase() });
@@ -68,176 +73,198 @@ export default function JoinScreen() {
     });
   };
 
+  if (view === 'stats') {
+    return <StatsScreen onBack={() => setView('home')} />;
+  }
+
   return (
-    <div className="h-full flex flex-col items-center justify-center p-6">
-      <div className="mb-8 text-center">
-        <div className="text-5xl mb-2">♠ ♥ ♦ ♣</div>
-        <h1 className="text-4xl font-bold tracking-tight">
-          Lazy<span className="text-gold">Poker</span>
+    <div className="h-full flex flex-col items-center justify-center p-6 felt-noise vignette">
+      {/* Wordmark */}
+      <div className="mb-10 text-center">
+        <div className="text-2xl mb-3 tracking-[0.6em] text-brass/40 select-none">
+          ♠ ♥ ♦ ♣
+        </div>
+        <h1 className="font-display text-6xl font-medium tracking-tight leading-none">
+          <span className="text-bone">Lazy</span>
+          <span className="italic text-brass">Poker</span>
         </h1>
-        <p className="text-white/60 mt-2">No chips? No problem.</p>
+        <p className="font-display italic text-bone-dim text-sm mt-3 tracking-wide">
+          No chips? No problem.
+        </p>
       </div>
 
       {!serverUrl && (
-        <div className="space-y-3 w-full max-w-xs mb-4 animate-fade-in">
-          <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
-            <p className="text-sm text-white/70 text-center">
-              Enter the game server address to connect
+        <Card className="w-full max-w-xs mb-4 animate-fade-in">
+          <CardContent className="p-5 space-y-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-bone-dim text-center">
+              Server Address
             </p>
-            <input
+            <Input
               type="text"
               placeholder="http://192.168.1.x:3000"
               value={serverInput}
               onChange={(e) => setServerInput(e.target.value)}
-              className="w-full py-3 px-4 bg-white/10 border border-white/20 rounded-xl
-                         text-white placeholder-white/40 text-center text-sm
-                         focus:outline-none focus:border-gold"
+              className="text-center text-sm"
             />
-            <button
+            <Button
+              variant="raise"
+              size="lg"
+              className="w-full"
               onClick={() => {
                 if (serverInput.trim()) {
                   setServerUrl(serverInput.trim().replace(/\/$/, ''));
                 }
               }}
               disabled={!serverInput.trim()}
-              className="w-full py-3 bg-gold text-black font-bold rounded-xl
-                         hover:bg-gold/90 active:scale-95 transition-all disabled:opacity-50"
             >
               Connect
-            </button>
-            <p className="text-xs text-white/40 text-center">
-              The host runs the server locally and shares the address
+            </Button>
+            <p className="text-[10px] text-bone-dim/70 text-center leading-relaxed">
+              The host runs the server locally and shares the address.
             </p>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
       {serverUrl && !connected && (
-        <div className="text-yellow-400 mb-4 text-sm">Connecting to server...</div>
+        <div className="text-brass/80 mb-4 text-xs uppercase tracking-[0.2em] animate-pulse">
+          Connecting…
+        </div>
       )}
 
       {view === 'home' && serverUrl && (
         <div className="space-y-3 w-full max-w-xs animate-fade-in">
-          <button
+          <Button
+            variant="raise"
+            size="xl"
+            className="w-full"
             onClick={() => setView('create')}
             disabled={!connected}
-            className="w-full py-4 bg-gold text-black font-bold rounded-xl text-lg
-                       hover:bg-gold/90 active:scale-95 transition-all disabled:opacity-50"
           >
             Create Game
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="outline"
+            size="xl"
+            className="w-full"
             onClick={() => setView('join')}
             disabled={!connected}
-            className="w-full py-4 bg-white/10 border border-white/20 rounded-xl text-lg
-                       hover:bg-white/20 active:scale-95 transition-all disabled:opacity-50"
           >
             Join Game
-          </button>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full text-bone-dim"
+            onClick={() => setView('stats')}
+          >
+            View my stats
+          </Button>
         </div>
       )}
 
       {view === 'create' && (
-        <div className="space-y-4 w-full max-w-xs animate-slide-up">
-          <input
-            type="text"
-            placeholder="Your name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            maxLength={15}
-            autoFocus
-            className="w-full py-3 px-4 bg-white/10 border border-white/20 rounded-xl
-                       text-white placeholder-white/40 text-center text-lg
-                       focus:outline-none focus:border-gold"
-          />
+        <Card className="w-full max-w-xs animate-slide-up">
+          <CardContent className="p-5 space-y-4">
+            <div className="space-y-2">
+              <Label>Your name</Label>
+              <Input
+                type="text"
+                placeholder="Enter name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                maxLength={15}
+                autoFocus
+                className="text-center text-lg"
+              />
+            </div>
 
-          <div className="flex gap-2">
-            <button
-              onClick={() => setMode('chip-only')}
-              className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all
-                ${mode === 'chip-only'
-                  ? 'bg-gold text-black'
-                  : 'bg-white/10 border border-white/20'}`}
+            <div className="space-y-2">
+              <Label>Mode</Label>
+              <ToggleGroup
+                type="single"
+                value={mode}
+                onValueChange={(v) => v && setMode(v as GameMode)}
+                className="w-full"
+              >
+                <ToggleGroupItem value="chip-only">Chip Only</ToggleGroupItem>
+                <ToggleGroupItem value="full">Full Game</ToggleGroupItem>
+              </ToggleGroup>
+              <p className="text-[11px] text-bone-dim/70 text-center leading-relaxed pt-1">
+                {mode === 'chip-only'
+                  ? 'Use your own cards. App tracks chips & bets.'
+                  : 'Cards dealt on your phone. Full digital poker.'}
+              </p>
+            </div>
+
+            <Button
+              variant="raise"
+              size="xl"
+              className="w-full"
+              onClick={handleCreate}
+              disabled={!name.trim() || loading}
             >
-              Chip Only
-            </button>
-            <button
-              onClick={() => setMode('full')}
-              className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all
-                ${mode === 'full'
-                  ? 'bg-gold text-black'
-                  : 'bg-white/10 border border-white/20'}`}
-            >
-              Full Game
-            </button>
-          </div>
+              {loading ? 'Creating…' : 'Start Game'}
+            </Button>
 
-          <p className="text-xs text-white/50 text-center">
-            {mode === 'chip-only'
-              ? 'Use your own cards. App tracks chips & bets.'
-              : 'Cards dealt on your phone. Full digital poker.'}
-          </p>
-
-          <button
-            onClick={handleCreate}
-            disabled={!name.trim() || loading}
-            className="w-full py-4 bg-gold text-black font-bold rounded-xl text-lg
-                       hover:bg-gold/90 active:scale-95 transition-all disabled:opacity-50"
-          >
-            {loading ? 'Creating...' : 'Start Game'}
-          </button>
-
-          <button
-            onClick={() => setView('home')}
-            className="w-full py-2 text-white/50 text-sm"
-          >
-            Back
-          </button>
-        </div>
+            <Button variant="ghost" className="w-full" onClick={() => setView('home')}>
+              Back
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       {view === 'join' && (
-        <div className="space-y-4 w-full max-w-xs animate-slide-up">
-          <input
-            type="text"
-            placeholder="Your name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            maxLength={15}
-            autoFocus
-            className="w-full py-3 px-4 bg-white/10 border border-white/20 rounded-xl
-                       text-white placeholder-white/40 text-center text-lg
-                       focus:outline-none focus:border-gold"
-          />
-          <input
-            type="text"
-            placeholder="Room code"
-            value={roomCode}
-            onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-            maxLength={4}
-            className="w-full py-3 px-4 bg-white/10 border border-white/20 rounded-xl
-                       text-white placeholder-white/40 text-center text-2xl tracking-[0.5em]
-                       font-mono focus:outline-none focus:border-gold"
-          />
+        <Card className="w-full max-w-xs animate-slide-up">
+          <CardContent className="p-5 space-y-4">
+            <div className="space-y-2">
+              <Label>Your name</Label>
+              <Input
+                type="text"
+                placeholder="Enter name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                maxLength={15}
+                autoFocus
+                className="text-center text-lg"
+              />
+            </div>
 
-          {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+            <div className="space-y-2">
+              <Label>Room code</Label>
+              <Input
+                type="text"
+                variant="mono"
+                placeholder="XXXX"
+                value={roomCode}
+                onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                maxLength={4}
+              />
+            </div>
 
-          <button
-            onClick={handleJoin}
-            disabled={!name.trim() || !roomCode.trim() || loading}
-            className="w-full py-4 bg-gold text-black font-bold rounded-xl text-lg
-                       hover:bg-gold/90 active:scale-95 transition-all disabled:opacity-50"
-          >
-            {loading ? 'Joining...' : 'Join Game'}
-          </button>
+            {error && (
+              <p className="text-ember text-xs text-center font-medium">{error}</p>
+            )}
 
-          <button
-            onClick={() => { setView('home'); setError(''); }}
-            className="w-full py-2 text-white/50 text-sm"
-          >
-            Back
-          </button>
-        </div>
+            <Button
+              variant="raise"
+              size="xl"
+              className="w-full"
+              onClick={handleJoin}
+              disabled={!name.trim() || !roomCode.trim() || loading}
+            >
+              {loading ? 'Joining…' : 'Join Game'}
+            </Button>
+
+            <Button
+              variant="ghost"
+              className="w-full"
+              onClick={() => { setView('home'); setError(''); }}
+            >
+              Back
+            </Button>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
