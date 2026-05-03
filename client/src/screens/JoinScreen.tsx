@@ -29,25 +29,6 @@ export default function JoinScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    if (!socket || !connected) return;
-    const saved = localStorage.getItem('lazypoker_session');
-    if (saved) {
-      try {
-        const { playerId, roomCode: savedRoom } = JSON.parse(saved);
-        socket.emit('reconnect-player', { roomCode: savedRoom, playerId }, (response) => {
-          if (response.success) {
-            dispatch({ type: 'SET_PLAYER', playerId, roomCode: savedRoom });
-          } else {
-            localStorage.removeItem('lazypoker_session');
-          }
-        });
-      } catch {
-        localStorage.removeItem('lazypoker_session');
-      }
-    }
-  }, [socket, connected]);
-
   const handleCreate = () => {
     if (!socket || !name.trim()) return;
     setLoading(true);

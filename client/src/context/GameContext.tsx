@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useRef, useCallback } from 'react';
 import { GameState, GameSummary } from '@common/types';
 import { useSocket } from './SocketContext';
 
@@ -103,6 +103,60 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       }));
     }
   }, [state.playerId, state.roomCode]);
+
+  // Restore session from localStorage on mount so the rest of the app sees
+  // the playerId immediately; the actual server-side re-association happens
+  // in the next effect, gated on socket connectivity.
+  useEffect(() => {
+    const saved = localStorage.getItem('lazypoker_session');
+    if (!saved) return;
+    try {
+      const { playerId, roomCode } = JSON.parse(saved);
+      if (playerId && roomCode) {
+        dispatch({ type: 'SET_PLAYER', playerId, roomCode });
+      }
+    } catch {
+      localStorage.removeItem('lazypoker_session');
+    }
+  }, []);
+
+  // Re-emit `reconnect-player` on every socket (re)connect. socket.io
+  // auto-reconnects with a NEW socket id when the network drops; without
+  // this the server's playerSocketMap stays empty and broadcastState
+  // silently skips this client until the page is refreshed.
+  const sessionRef = useRef<{ playerId: string | null; roomCode: string | null }>({
+    playerId: null,
+    roomCode: null,
+  });
+  useEffect(() => {
+    sessionRef.current = { playerId: state.playerId, roomCode: state.roomCode };
+  }, [state.playerId, state.roomCode]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const doReconnect = () => {
+      const { playerId, roomCode } = sessionRef.current;
+      if (!playerId || !roomCode) return;
+      socket.emit('reconnect-player', { roomCode, playerId }, (response) => {
+        if (!response.success) {
+          // Room is gone server-side — drop the stale session so the user
+          // lands back on the join screen instead of looping forever.
+          localStorage.removeItem('lazypoker_session');
+          dispatch({ type: 'RESET' });
+        }
+      });
+    };
+
+    // Catch the race where the socket already fired 'connect' before this
+    // listener attached (common on initial mount).
+    if (socket.connected) doReconnect();
+    socket.on('connect', doReconnect);
+
+    return () => {
+      socket.off('connect', doReconnect);
+    };
+  }, [socket]);
 
   const currentPlayer = state.gameState?.players.find(p => p.id === state.playerId) || null;
   const isAdmin = currentPlayer?.isAdmin || false;
