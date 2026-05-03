@@ -20,7 +20,7 @@ export function setupSocketHandlers(
     console.log(`Client connected: ${socket.id}`);
 
     socket.on('create', (data, callback) => {
-      const roomCode = gameManager.createRoom(data.mode);
+      const roomCode = gameManager.createRoom(data.mode, data.variant ?? 'poker');
       const result = gameManager.joinRoom(roomCode, data.playerName, socket.id, data.playerKey);
       if (result) {
         socket.join(roomCode);

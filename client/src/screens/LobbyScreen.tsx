@@ -54,6 +54,7 @@ export default function LobbyScreen() {
 
   const seatedPlayers = gameState.players.filter(p => p.seatIndex >= 0);
   const canStart = seatedPlayers.length >= 2;
+  const isTeenPatti = gameState.variant === 'teen-patti';
 
   return (
     <div className="h-full flex flex-col p-4 felt-noise vignette mx-auto w-full max-w-4xl">
@@ -71,7 +72,9 @@ export default function LobbyScreen() {
           </Button>
         </div>
         <p className="text-bone-dim/80 text-xs mt-2 tracking-wide uppercase">
-          {gameState.mode === 'chip-only' ? 'Chip Only' : 'Full Game'}
+          {isTeenPatti
+            ? 'Teen Patti'
+            : gameState.mode === 'chip-only' ? 'Chip Only' : 'Full Game'}
           <span className="mx-2 text-brass/40">·</span>
           {gameState.players.length} player{gameState.players.length !== 1 ? 's' : ''}
         </p>
@@ -81,19 +84,23 @@ export default function LobbyScreen() {
       {isAdmin && (
         <Card className="mb-4">
           <CardContent className="p-4 space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-xs uppercase tracking-[0.18em] text-bone-dim">Mode</span>
-              <ToggleGroup
-                type="single"
-                value={gameState.mode}
-                onValueChange={(v) => v && handleConfigure('mode', v)}
-              >
-                <ToggleGroupItem value="chip-only" className="px-3 py-1 text-[11px]">Chip Only</ToggleGroupItem>
-                <ToggleGroupItem value="full" className="px-3 py-1 text-[11px]">Full</ToggleGroupItem>
-              </ToggleGroup>
-            </div>
+            {!isTeenPatti && (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs uppercase tracking-[0.18em] text-bone-dim">Mode</span>
+                  <ToggleGroup
+                    type="single"
+                    value={gameState.mode}
+                    onValueChange={(v) => v && handleConfigure('mode', v)}
+                  >
+                    <ToggleGroupItem value="chip-only" className="px-3 py-1 text-[11px]">Chip Only</ToggleGroupItem>
+                    <ToggleGroupItem value="full" className="px-3 py-1 text-[11px]">Full</ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
 
-            <Separator />
+                <Separator />
+              </>
+            )}
 
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs uppercase tracking-[0.18em] text-bone-dim">Starting Chips</span>
@@ -137,24 +144,89 @@ export default function LobbyScreen() {
 
             <Separator />
 
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-xs uppercase tracking-[0.18em] text-bone-dim">Blinds</span>
-              <Select
-                value={`${gameState.smallBlind}/${gameState.bigBlind}`}
-                onValueChange={handleBlinds}
-              >
-                <SelectTrigger className="w-32 h-9 text-sm font-mono">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[[1, 2], [5, 10], [10, 20], [25, 50], [50, 100], [100, 200]].map(([sb, bb]) => (
-                    <SelectItem key={`${sb}/${bb}`} value={`${sb}/${bb}`} className="font-mono">
-                      {sb}/{bb}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {isTeenPatti && gameState.teenPatti ? (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs uppercase tracking-[0.18em] text-bone-dim">Boot</span>
+                  <Select
+                    value={String(gameState.teenPatti.boot)}
+                    onValueChange={(v) => handleConfigure('boot', parseInt(v))}
+                  >
+                    <SelectTrigger className="w-32 h-9 text-sm font-mono">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[5, 10, 20, 50, 100].map(v => (
+                        <SelectItem key={v} value={String(v)} className="font-mono">
+                          {v.toLocaleString()}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Separator />
+
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs uppercase tracking-[0.18em] text-bone-dim">Chaal Limit</span>
+                  <Select
+                    value={String(gameState.teenPatti.chaalLimitMultiplier)}
+                    onValueChange={(v) => handleConfigure('chaalLimitMultiplier', parseInt(v))}
+                  >
+                    <SelectTrigger className="w-32 h-9 text-sm font-mono">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[2, 4, 8].map(v => (
+                        <SelectItem key={v} value={String(v)} className="font-mono">
+                          {v}× stake
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Separator />
+
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs uppercase tracking-[0.18em] text-bone-dim">Pot Limit</span>
+                  <Select
+                    value={String(gameState.teenPatti.potLimitMultiplier)}
+                    onValueChange={(v) => handleConfigure('potLimitMultiplier', parseInt(v))}
+                  >
+                    <SelectTrigger className="w-32 h-9 text-sm font-mono">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[64, 128, 256, 512].map(v => (
+                        <SelectItem key={v} value={String(v)} className="font-mono">
+                          {v}× boot
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs uppercase tracking-[0.18em] text-bone-dim">Blinds</span>
+                <Select
+                  value={`${gameState.smallBlind}/${gameState.bigBlind}`}
+                  onValueChange={handleBlinds}
+                >
+                  <SelectTrigger className="w-32 h-9 text-sm font-mono">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[[1, 2], [5, 10], [10, 20], [25, 50], [50, 100], [100, 200]].map(([sb, bb]) => (
+                      <SelectItem key={`${sb}/${bb}`} value={`${sb}/${bb}`} className="font-mono">
+                        {sb}/{bb}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

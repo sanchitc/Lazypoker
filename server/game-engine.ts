@@ -1,13 +1,16 @@
-import { GameState, Player, PlayerAction, Phase, Pot, Card, GameMode, HandSummary, HandWinner } from '../common/types.js';
-import { DEFAULT_CONFIG } from '../common/constants.js';
+import { GameState, Player, PlayerAction, Phase, Pot, Card, GameMode, GameVariant, HandSummary, HandWinner } from '../common/types.js';
+import { DEFAULT_CONFIG, DEFAULT_TEEN_PATTI_CONFIG, TEEN_PATTI_MAX_PLAYERS } from '../common/constants.js';
 import { Dealer } from './deck.js';
 import { evaluateHand, compareHands } from './hand-evaluator.js';
+import { evaluateTeenPattiHand, compareTeenPattiHands } from './teen-patti-evaluator.js';
 import { generatePlayerId } from './utils.js';
 
-export function createInitialState(roomCode: string, mode: GameMode): GameState {
+export function createInitialState(roomCode: string, mode: GameMode, variant: GameVariant = 'poker'): GameState {
+  const isTeenPatti = variant === 'teen-patti';
   return {
     roomCode,
     mode,
+    variant,
     phase: 'SETUP',
     players: [],
     communityCards: [],
@@ -20,13 +23,16 @@ export function createInitialState(roomCode: string, mode: GameMode): GameState 
     bigBlind: DEFAULT_CONFIG.bigBlind,
     handNumber: 0,
     startingChips: DEFAULT_CONFIG.startingChips,
-    maxPlayers: DEFAULT_CONFIG.maxPlayers,
+    maxPlayers: isTeenPatti ? TEEN_PATTI_MAX_PLAYERS : DEFAULT_CONFIG.maxPlayers,
     lastAction: null,
     bettingRound: 0,
     actedThisRound: [],
     turnTimer: 0,
     allowPlayersAwardPot: false,
     lastHandSummary: null,
+    teenPatti: isTeenPatti ? { ...DEFAULT_TEEN_PATTI_CONFIG } : undefined,
+    pendingSideshow: null,
+    showCallerId: null,
   };
 }
 
@@ -46,6 +52,7 @@ export function addPlayer(state: GameState, name: string, isAdmin: boolean, play
     isSittingOut: false,
     isConnected: true,
     isAdmin,
+    hasSeenCards: false,
     playerKey,
   };
   return {
@@ -367,7 +374,7 @@ function determineWinners(state: GameState): GameState {
 
       const results = eligible.map(p => ({
         player: p,
-        hand: evaluateHand(p.holeCards!, state.communityCards),
+        hand: evaluateHand(p.holeCards as [Card, Card], state.communityCards),
       }));
 
       results.sort((a, b) => compareHands(b.hand, a.hand));
@@ -490,11 +497,49 @@ export function processAction(state: GameState, playerId: string, action: Player
 
   const player = state.players[playerIndex];
 
+  // Variant-specific action dispatch. Shared admin actions (ADD_CHIPS,
+  // KICK_PLAYER, SET_DEALER, END_GAME, LEAVE_GAME, SHOW_CARDS) fall through
+  // to the main switch below regardless of variant.
+  if (state.variant === 'teen-patti') {
+    switch (action.type) {
+      case 'PACK': return tpPack(state, playerIndex);
+      case 'CHAAL': return tpChaal(state, playerIndex);
+      case 'RAISE_TP': return tpRaise(state, playerIndex, action.amount);
+      case 'SEE_CARDS': return tpSeeCards(state, playerIndex);
+      case 'REQUEST_SIDESHOW': return tpRequestSideshow(state, playerIndex);
+      case 'RESPOND_SIDESHOW': return tpRespondSideshow(state, playerIndex, action.accept);
+      case 'CALL_SHOW': return tpCallShow(state, playerIndex);
+      // Reject poker-only actions in Teen Patti rooms.
+      case 'FOLD':
+      case 'CHECK':
+      case 'CALL':
+      case 'RAISE':
+      case 'ALL_IN':
+        return state;
+    }
+  } else {
+    // Reject Teen Patti actions in poker rooms.
+    switch (action.type) {
+      case 'PACK':
+      case 'CHAAL':
+      case 'RAISE_TP':
+      case 'SEE_CARDS':
+      case 'REQUEST_SIDESHOW':
+      case 'RESPOND_SIDESHOW':
+      case 'CALL_SHOW':
+        return state;
+    }
+  }
+
   switch (action.type) {
     case 'START_HAND': {
       if (!player.isAdmin) return state;
       const active = getActivePlayers(state);
       if (active.length < 2) return state;
+
+      if (state.variant === 'teen-patti') {
+        return startTeenPattiHand(state);
+      }
 
       // Chip-only: block dealing if pot hasn't been awarded yet
       if (state.mode === 'chip-only') {
@@ -832,21 +877,448 @@ export function processAction(state: GameState, playerId: string, action: Player
 
 export function filterStateForPlayer(state: GameState, playerId: string): GameState {
   const isShowdown = state.phase === 'SHOWDOWN' || state.phase === 'HAND_COMPLETE';
+  const isTeenPatti = state.variant === 'teen-patti';
   return {
     ...state,
     players: state.players.map(p => {
       // Strip playerKey from broadcasts — it's a server-only analytics id.
       const { playerKey: _omit, ...rest } = p;
       void _omit;
+
+      // Reveal own cards always except in Teen Patti while still blind (FR-14).
+      // Reveal opponents' cards only at showdown when they didn't pack, or
+      // when they explicitly toggled wantsToShowCards.
+      const isOwn = p.id === playerId;
+      const ownCanSee = !isTeenPatti || !!p.hasSeenCards;
+      const visible =
+        (isOwn && ownCanSee) ||
+        (isShowdown && !p.isFolded) ||
+        p.wantsToShowCards;
+
       return {
         ...rest,
-        holeCards:
-          p.id === playerId ||
-          (isShowdown && !p.isFolded) ||
-          p.wantsToShowCards
-            ? p.holeCards
-            : null,
+        holeCards: visible ? p.holeCards : null,
       };
     }),
+  };
+}
+
+// ============================================================
+// Teen Patti engine
+// ============================================================
+
+function getTeenPattiActivePlayers(state: GameState): Player[] {
+  return state.players
+    .filter(p => p.seatIndex >= 0 && !p.isFolded && !p.isSittingOut)
+    .sort((a, b) => a.seatIndex - b.seatIndex);
+}
+
+function nextTeenPattiActiveIndex(state: GameState, fromSeat: number): number {
+  const active = getTeenPattiActivePlayers(state);
+  if (active.length === 0) return -1;
+  for (const p of active) {
+    if (p.seatIndex > fromSeat) return state.players.findIndex(pl => pl.id === p.id);
+  }
+  return state.players.findIndex(p => p.id === active[0].id);
+}
+
+function previousTeenPattiActivePlayer(state: GameState, fromSeat: number): Player | null {
+  const others = getTeenPattiActivePlayers(state).filter(p => p.seatIndex !== fromSeat);
+  if (others.length === 0) return null;
+  // Highest seat below fromSeat, else wrap to highest seat overall.
+  let prev: Player | null = null;
+  for (const p of others) {
+    if (p.seatIndex < fromSeat) prev = p;
+    else break;
+  }
+  return prev || others[others.length - 1];
+}
+
+function teenPattiPotLimitReached(state: GameState): boolean {
+  if (!state.teenPatti) return false;
+  const limit = state.teenPatti.boot * state.teenPatti.potLimitMultiplier;
+  const pot = state.pots.reduce((sum, p) => sum + p.amount, 0);
+  return pot >= limit;
+}
+
+function startTeenPattiHand(state: GameState): GameState {
+  let s: GameState = { ...state, players: state.players.map(p => ({ ...p })) };
+
+  s.handNumber++;
+  s.communityCards = [];
+  s.lastAction = null;
+  s.lastHandSummary = null;
+  s.bettingRound = 0;
+  s.actedThisRound = [];
+  s.pendingSideshow = null;
+  s.showCallerId = null;
+  for (const p of s.players) {
+    p.currentBet = 0;
+    p.totalBetThisHand = 0;
+    p.isFolded = false;
+    p.isAllIn = false;
+    p.holeCards = null;
+    p.wantsToShowCards = false;
+    p.hasSeenCards = false;
+  }
+
+  s = rotateDealerButton(s);
+
+  const boot = s.teenPatti?.boot ?? 10;
+  const active = getActivePlayers(s);
+  const eligibleIds = active.map(p => p.id);
+
+  // Charge boot from each active player; seed main pot.
+  let bootTotal = 0;
+  s.players = s.players.map(p => {
+    if (active.find(a => a.id === p.id)) {
+      const amount = Math.min(boot, p.chips);
+      bootTotal += amount;
+      return {
+        ...p,
+        chips: p.chips - amount,
+        totalBetThisHand: amount,
+        isAllIn: p.chips - amount === 0,
+      };
+    }
+    return p;
+  });
+  s.pots = [{ amount: bootTotal, eligiblePlayerIds: eligibleIds }];
+  s.currentBet = boot; // stake reference (1× value)
+  s.minRaise = boot;
+
+  // Deal 3 cards each.
+  dealer.shuffle();
+  s.players = s.players.map(p => {
+    if (active.find(a => a.id === p.id)) {
+      return { ...p, holeCards: dealer.deal(3) };
+    }
+    return { ...p, holeCards: null };
+  });
+
+  s.phase = 'BETTING';
+  s.activePlayerIndex = nextTeenPattiActiveIndex(s, s.dealerSeatIndex);
+
+  return s;
+}
+
+function tpPack(state: GameState, playerIndex: number): GameState {
+  if (state.activePlayerIndex !== playerIndex) return state;
+  if (state.phase !== 'BETTING') return state;
+  const player = state.players[playerIndex];
+
+  let s: GameState = {
+    ...state,
+    players: state.players.map((p, i) =>
+      i === playerIndex ? { ...p, isFolded: true } : p
+    ),
+    lastAction: { playerId: player.id, action: 'pack' },
+  };
+
+  if (getTeenPattiActivePlayers(s).length === 1) {
+    return resolveTeenPattiSingleSurvivor(s);
+  }
+  s.activePlayerIndex = nextTeenPattiActiveIndex(s, player.seatIndex);
+  return s;
+}
+
+function tpSeeCards(state: GameState, playerIndex: number): GameState {
+  if (state.activePlayerIndex !== playerIndex) return state;
+  if (state.phase !== 'BETTING') return state;
+  const player = state.players[playerIndex];
+  if (player.hasSeenCards || player.isFolded) return state;
+
+  return {
+    ...state,
+    players: state.players.map((p, i) =>
+      i === playerIndex ? { ...p, hasSeenCards: true } : p
+    ),
+    lastAction: { playerId: player.id, action: 'see' },
+  };
+}
+
+function tpChaal(state: GameState, playerIndex: number): GameState {
+  if (state.activePlayerIndex !== playerIndex) return state;
+  if (state.phase !== 'BETTING') return state;
+  const player = state.players[playerIndex];
+  if (player.isFolded) return state;
+
+  const cost = (player.hasSeenCards ? 2 : 1) * state.currentBet;
+  if (cost > player.chips) return state;
+
+  let s: GameState = {
+    ...state,
+    players: state.players.map((p, i) =>
+      i === playerIndex
+        ? {
+            ...p,
+            chips: p.chips - cost,
+            totalBetThisHand: p.totalBetThisHand + cost,
+            isAllIn: p.chips - cost === 0,
+          }
+        : p
+    ),
+    pots: state.pots.map((pot, i) =>
+      i === 0 ? { ...pot, amount: pot.amount + cost } : pot
+    ),
+    lastAction: { playerId: player.id, action: 'chaal', amount: cost },
+  };
+
+  if (teenPattiPotLimitReached(s)) {
+    return resolveTeenPattiShowdown(s, 'pot-limit', null);
+  }
+  s.activePlayerIndex = nextTeenPattiActiveIndex(s, player.seatIndex);
+  return s;
+}
+
+function tpRaise(state: GameState, playerIndex: number, newStake: number): GameState {
+  if (state.activePlayerIndex !== playerIndex) return state;
+  if (state.phase !== 'BETTING') return state;
+  if (!state.teenPatti) return state;
+  const player = state.players[playerIndex];
+  if (player.isFolded) return state;
+
+  // newStake = the post-raise stake (1× value). Cost = 1× or 2× of newStake
+  // depending on blind/seen. The chaalLimit caps total chips paid this turn.
+  if (newStake <= state.currentBet) return state;
+  const chaalLimit = state.teenPatti.chaalLimitMultiplier * state.currentBet;
+  const cost = (player.hasSeenCards ? 2 : 1) * newStake;
+  if (cost > chaalLimit) return state;
+  if (cost > player.chips) return state;
+
+  let s: GameState = {
+    ...state,
+    players: state.players.map((p, i) =>
+      i === playerIndex
+        ? {
+            ...p,
+            chips: p.chips - cost,
+            totalBetThisHand: p.totalBetThisHand + cost,
+            isAllIn: p.chips - cost === 0,
+          }
+        : p
+    ),
+    currentBet: newStake,
+    minRaise: newStake,
+    pots: state.pots.map((pot, i) =>
+      i === 0 ? { ...pot, amount: pot.amount + cost } : pot
+    ),
+    lastAction: { playerId: player.id, action: 'raise', amount: cost },
+  };
+
+  if (teenPattiPotLimitReached(s)) {
+    return resolveTeenPattiShowdown(s, 'pot-limit', null);
+  }
+  s.activePlayerIndex = nextTeenPattiActiveIndex(s, player.seatIndex);
+  return s;
+}
+
+function tpRequestSideshow(state: GameState, playerIndex: number): GameState {
+  if (state.activePlayerIndex !== playerIndex) return state;
+  if (state.phase !== 'BETTING') return state;
+  const player = state.players[playerIndex];
+  if (player.isFolded) return state;
+  if (!player.hasSeenCards) return state;
+
+  const active = getTeenPattiActivePlayers(state);
+  if (active.length < 3) return state; // sideshow disabled in heads-up
+
+  const target = previousTeenPattiActivePlayer(state, player.seatIndex);
+  if (!target) return state;
+  if (!target.hasSeenCards) return state;
+
+  // Sideshow fee = 1× current stake (paid into pot).
+  const cost = state.currentBet;
+  if (cost > player.chips) return state;
+
+  return {
+    ...state,
+    players: state.players.map((p, i) =>
+      i === playerIndex
+        ? {
+            ...p,
+            chips: p.chips - cost,
+            totalBetThisHand: p.totalBetThisHand + cost,
+            isAllIn: p.chips - cost === 0,
+          }
+        : p
+    ),
+    pots: state.pots.map((pot, i) =>
+      i === 0 ? { ...pot, amount: pot.amount + cost } : pot
+    ),
+    pendingSideshow: { requesterId: player.id, targetId: target.id },
+    phase: 'SIDESHOW_PENDING',
+    lastAction: { playerId: player.id, action: 'sideshow request' },
+  };
+}
+
+function tpRespondSideshow(state: GameState, playerIndex: number, accept: boolean): GameState {
+  if (state.phase !== 'SIDESHOW_PENDING' || !state.pendingSideshow) return state;
+  const responder = state.players[playerIndex];
+  if (responder.id !== state.pendingSideshow.targetId) return state;
+
+  const requesterIndex = state.players.findIndex(p => p.id === state.pendingSideshow!.requesterId);
+  if (requesterIndex < 0) return state;
+  const requester = state.players[requesterIndex];
+
+  if (!accept) {
+    return {
+      ...state,
+      pendingSideshow: null,
+      phase: 'BETTING',
+      lastAction: { playerId: responder.id, action: 'sideshow declined' },
+    };
+  }
+
+  // Compare hands; the lower-ranked player packs. On tie, requester loses
+  // (challenger needs strictly better hand).
+  const reqHand = evaluateTeenPattiHand(requester.holeCards as [Card, Card, Card]);
+  const respHand = evaluateTeenPattiHand(responder.holeCards as [Card, Card, Card]);
+  const cmp = compareTeenPattiHands(reqHand, respHand);
+  const loserIndex = cmp >= 0 ? playerIndex : requesterIndex;
+  const loser = state.players[loserIndex];
+
+  let s: GameState = {
+    ...state,
+    pendingSideshow: null,
+    phase: 'BETTING',
+    players: state.players.map((p, i) =>
+      i === loserIndex ? { ...p, isFolded: true } : p
+    ),
+    lastAction: { playerId: loser.id, action: 'sideshow lost — packs' },
+  };
+
+  if (getTeenPattiActivePlayers(s).length === 1) {
+    return resolveTeenPattiSingleSurvivor(s);
+  }
+  // Continue from the player after requester regardless of who packed.
+  s.activePlayerIndex = nextTeenPattiActiveIndex(s, requester.seatIndex);
+  return s;
+}
+
+function tpCallShow(state: GameState, playerIndex: number): GameState {
+  if (state.activePlayerIndex !== playerIndex) return state;
+  if (state.phase !== 'BETTING') return state;
+  const caller = state.players[playerIndex];
+  if (caller.isFolded) return state;
+
+  const active = getTeenPattiActivePlayers(state);
+  if (active.length !== 2) return state;
+
+  const opponent = active.find(p => p.id !== caller.id);
+  if (!opponent) return state;
+
+  // PRD §6.4: a seen player cannot force a blind opponent to show.
+  if (caller.hasSeenCards && !opponent.hasSeenCards) return state;
+
+  // Cost matrix: blind/* = 1× stake, seen/seen = 2× stake.
+  const costMultiplier = caller.hasSeenCards ? 2 : 1;
+  const cost = costMultiplier * state.currentBet;
+  if (cost > caller.chips) return state;
+
+  let s: GameState = {
+    ...state,
+    players: state.players.map((p, i) =>
+      i === playerIndex
+        ? {
+            ...p,
+            chips: p.chips - cost,
+            totalBetThisHand: p.totalBetThisHand + cost,
+            isAllIn: p.chips - cost === 0,
+          }
+        : p
+    ),
+    pots: state.pots.map((pot, i) =>
+      i === 0 ? { ...pot, amount: pot.amount + cost } : pot
+    ),
+    showCallerId: caller.id,
+    lastAction: { playerId: caller.id, action: 'show', amount: cost },
+  };
+
+  return resolveTeenPattiShowdown(s, 'show', caller.id);
+}
+
+function resolveTeenPattiSingleSurvivor(state: GameState): GameState {
+  const remaining = getTeenPattiActivePlayers(state);
+  if (remaining.length !== 1) return state;
+  const winner = remaining[0];
+  const totalPot = state.pots.reduce((sum, p) => sum + p.amount, 0);
+  const summary: HandSummary = {
+    handNumber: state.handNumber,
+    winners: [{ playerId: winner.id, amount: totalPot }],
+    totalAwarded: totalPot,
+    reason: 'pack',
+  };
+  return {
+    ...state,
+    players: state.players.map(p =>
+      p.id === winner.id ? { ...p, chips: p.chips + totalPot } : p
+    ),
+    pots: [{ amount: 0, eligiblePlayerIds: [] }],
+    phase: 'HAND_COMPLETE',
+    activePlayerIndex: -1,
+    pendingSideshow: null,
+    showCallerId: null,
+    lastAction: { playerId: winner.id, action: `wins ${totalPot}` },
+    lastHandSummary: summary,
+  };
+}
+
+function resolveTeenPattiShowdown(
+  state: GameState,
+  reason: 'show' | 'sideshow' | 'pot-limit',
+  callerId: string | null,
+): GameState {
+  const eligible = getTeenPattiActivePlayers(state);
+  if (eligible.length === 0) return state;
+
+  const results = eligible.map(p => ({
+    player: p,
+    hand: evaluateTeenPattiHand(p.holeCards as [Card, Card, Card]),
+  }));
+  results.sort((a, b) => compareTeenPattiHands(b.hand, a.hand));
+
+  const bestHand = results[0].hand;
+  let winnerResults = results.filter(r => compareTeenPattiHands(r.hand, bestHand) === 0);
+
+  // PRD D1: identical hands → show-caller loses (caller needs strictly better).
+  if (callerId && reason === 'show' && winnerResults.length > 1) {
+    const filtered = winnerResults.filter(w => w.player.id !== callerId);
+    if (filtered.length > 0) winnerResults = filtered;
+  }
+
+  const totalPot = state.pots.reduce((sum, p) => sum + p.amount, 0);
+  const share = Math.floor(totalPot / winnerResults.length);
+  const remainder = totalPot - share * winnerResults.length;
+
+  const newPlayers = state.players.map(p => ({ ...p }));
+  const winnerSummaries: HandWinner[] = [];
+  for (let i = 0; i < winnerResults.length; i++) {
+    const w = winnerResults[i];
+    const idx = newPlayers.findIndex(p => p.id === w.player.id);
+    const award = share + (i === 0 ? remainder : 0);
+    newPlayers[idx].chips += award;
+    winnerSummaries.push({
+      playerId: w.player.id,
+      amount: award,
+      handDescription: w.hand.description,
+      handRank: w.hand.rank,
+    });
+  }
+
+  return {
+    ...state,
+    players: newPlayers,
+    pots: [{ amount: 0, eligiblePlayerIds: [] }],
+    phase: 'HAND_COMPLETE',
+    activePlayerIndex: -1,
+    pendingSideshow: null,
+    showCallerId: null,
+    lastHandSummary: {
+      handNumber: state.handNumber,
+      winners: winnerSummaries,
+      totalAwarded: totalPot,
+      reason,
+    },
   };
 }

@@ -9,6 +9,7 @@
  */
 import { Scenario } from '../lib/scenario.js';
 import { evaluateHand, compareHands } from '../../server/hand-evaluator.js';
+import { evaluateTeenPattiHand, compareTeenPattiHands } from '../../server/teen-patti-evaluator.js';
 import type { Card, Rank, Suit } from '../../common/types.js';
 
 const c = (rank: Rank, suit: Suit): Card => ({ rank, suit });
@@ -190,6 +191,101 @@ export const handEvaluatorScenarios: Scenario[] = [
       ctx.expect(compareHands(a, b) === 0, 'identical hands tie', {
         actual: String(compareHands(a, b)),
       });
+    },
+  },
+
+  // ============================================================
+  // Teen Patti hand rankings
+  // ============================================================
+  {
+    name: 'TP: trail beats pure sequence',
+    category: 'HandEvaluator',
+    async fn(ctx) {
+      const trail = evaluateTeenPattiHand([c('2', 'spades'), c('2', 'hearts'), c('2', 'diamonds')]);
+      const pure = evaluateTeenPattiHand([c('A', 'hearts'), c('2', 'hearts'), c('3', 'hearts')]);
+      ctx.expect(trail.rank === 'trail', 'trail detected', { actual: trail.rank });
+      ctx.expect(pure.rank === 'pure-sequence', 'pure sequence detected', { actual: pure.rank });
+      ctx.expect(compareTeenPattiHands(trail, pure) > 0, 'trail of 2s beats pure-sequence A-2-3');
+    },
+  },
+  {
+    name: 'TP: pure sequence A-2-3 is highest sequence (wraparound)',
+    category: 'HandEvaluator',
+    async fn(ctx) {
+      const a23 = evaluateTeenPattiHand([c('A', 'hearts'), c('2', 'hearts'), c('3', 'hearts')]);
+      const akq = evaluateTeenPattiHand([c('A', 'spades'), c('K', 'spades'), c('Q', 'spades')]);
+      ctx.expect(a23.rank === 'pure-sequence' && akq.rank === 'pure-sequence', 'both pure-sequence');
+      ctx.expect(compareTeenPattiHands(a23, akq) > 0, 'A-2-3 beats A-K-Q (wraparound rule)', {
+        severity: 'critical',
+      });
+    },
+  },
+  {
+    name: 'TP: pure sequence beats sequence',
+    category: 'HandEvaluator',
+    async fn(ctx) {
+      const pure = evaluateTeenPattiHand([c('5', 'clubs'), c('6', 'clubs'), c('7', 'clubs')]);
+      const seq = evaluateTeenPattiHand([c('5', 'spades'), c('6', 'hearts'), c('7', 'diamonds')]);
+      ctx.expect(compareTeenPattiHands(pure, seq) > 0, 'pure sequence beats mixed sequence');
+    },
+  },
+  {
+    name: 'TP: sequence beats color (PRD §3 inversion vs poker)',
+    category: 'HandEvaluator',
+    async fn(ctx) {
+      // High color (A-K-J of spades) vs low sequence (4-3-2)
+      const color = evaluateTeenPattiHand([c('A', 'spades'), c('K', 'spades'), c('J', 'spades')]);
+      const seq = evaluateTeenPattiHand([c('2', 'hearts'), c('3', 'spades'), c('4', 'diamonds')]);
+      ctx.expect(color.rank === 'color', 'color detected', { actual: color.rank });
+      ctx.expect(seq.rank === 'sequence', 'sequence detected', { actual: seq.rank });
+      ctx.expect(compareTeenPattiHands(seq, color) > 0, 'lowest sequence beats highest color', {
+        severity: 'critical',
+      });
+    },
+  },
+  {
+    name: 'TP: color beats pair',
+    category: 'HandEvaluator',
+    async fn(ctx) {
+      const color = evaluateTeenPattiHand([c('2', 'hearts'), c('5', 'hearts'), c('9', 'hearts')]);
+      const pair = evaluateTeenPattiHand([c('A', 'spades'), c('A', 'hearts'), c('K', 'clubs')]);
+      ctx.expect(compareTeenPattiHands(color, pair) > 0, 'color beats high pair');
+    },
+  },
+  {
+    name: 'TP: higher pair beats lower pair',
+    category: 'HandEvaluator',
+    async fn(ctx) {
+      const aa = evaluateTeenPattiHand([c('A', 'spades'), c('A', 'hearts'), c('2', 'clubs')]);
+      const kk = evaluateTeenPattiHand([c('K', 'spades'), c('K', 'hearts'), c('A', 'clubs')]);
+      ctx.expect(compareTeenPattiHands(aa, kk) > 0, 'pair of Aces beats pair of Kings (even with lower kicker)');
+    },
+  },
+  {
+    name: 'TP: same pair, higher kicker wins',
+    category: 'HandEvaluator',
+    async fn(ctx) {
+      const aaK = evaluateTeenPattiHand([c('A', 'spades'), c('A', 'hearts'), c('K', 'clubs')]);
+      const aaQ = evaluateTeenPattiHand([c('A', 'diamonds'), c('A', 'clubs'), c('Q', 'hearts')]);
+      ctx.expect(compareTeenPattiHands(aaK, aaQ) > 0, 'pair-of-aces with K kicker beats pair-of-aces with Q kicker');
+    },
+  },
+  {
+    name: 'TP: high-card tiebreak by 2nd then 3rd card',
+    category: 'HandEvaluator',
+    async fn(ctx) {
+      const a = evaluateTeenPattiHand([c('A', 'spades'), c('K', 'hearts'), c('5', 'clubs')]);
+      const b = evaluateTeenPattiHand([c('A', 'diamonds'), c('Q', 'spades'), c('J', 'hearts')]);
+      ctx.expect(compareTeenPattiHands(a, b) > 0, 'A-K-5 beats A-Q-J');
+    },
+  },
+  {
+    name: 'TP: identical high cards tie',
+    category: 'HandEvaluator',
+    async fn(ctx) {
+      const a = evaluateTeenPattiHand([c('A', 'spades'), c('Q', 'hearts'), c('5', 'clubs')]);
+      const b = evaluateTeenPattiHand([c('A', 'diamonds'), c('Q', 'clubs'), c('5', 'hearts')]);
+      ctx.expect(compareTeenPattiHands(a, b) === 0, 'identical high-card hands tie');
     },
   },
 ];

@@ -16,6 +16,7 @@ import { handEvaluatorScenarios } from './scenarios/hand-evaluator.js';
 import { reconnectScenarios } from './scenarios/reconnect.js';
 import { regressionScenarios } from './scenarios/regression.js';
 import { edgeCaseScenarios } from './scenarios/edge-cases.js';
+import { teenPattiScenarios } from './scenarios/teen-patti.js';
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -40,6 +41,7 @@ async function main() {
     ...reconnectScenarios,
     ...regressionScenarios,
     ...edgeCaseScenarios,
+    ...teenPattiScenarios,
   ];
 
   const filtered = all.filter((s) => {

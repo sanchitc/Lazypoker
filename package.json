@@ -17,7 +17,8 @@
     "test:chip": "tsx tests/runner.ts --only ChipOnly",
     "test:eval": "tsx tests/runner.ts --only HandEvaluator",
     "test:reconnect": "tsx tests/runner.ts --only Reconnect",
-    "test:regression": "tsx tests/runner.ts --only Regression"
+    "test:regression": "tsx tests/runner.ts --only Regression",
+    "test:tp": "tsx tests/runner.ts --only TeenPatti"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.12",

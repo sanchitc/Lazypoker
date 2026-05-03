@@ -15,7 +15,8 @@ export interface Player {
   chips: number;
   currentBet: number;
   totalBetThisHand: number;
-  holeCards: [Card, Card] | null;
+  // Length is variant-dependent: 2 for poker, 3 for teen-patti.
+  holeCards: Card[] | null;
   isDealer: boolean;
   isFolded: boolean;
   isAllIn: boolean;
@@ -23,6 +24,9 @@ export interface Player {
   isConnected: boolean;
   isAdmin: boolean;
   wantsToShowCards?: boolean;
+  // Teen Patti: true once the player has chosen to look at their cards.
+  // Server filters out their own holeCards until this flips to true (FR-14).
+  hasSeenCards?: boolean;
   // Stable client-generated id (localStorage). Used for analytics aggregation
   // across rooms/sessions. Server-only field; filtered out before sending state.
   playerKey?: string;
@@ -30,6 +34,7 @@ export interface Player {
 
 // ===== Game =====
 export type GameMode = 'full' | 'chip-only';
+export type GameVariant = 'poker' | 'teen-patti';
 
 export type Phase =
   | 'SETUP'
@@ -40,16 +45,35 @@ export type Phase =
   | 'RIVER'
   | 'SHOWDOWN'
   | 'BETTING_ROUND'
-  | 'HAND_COMPLETE';
+  | 'HAND_COMPLETE'
+  // Teen Patti phases
+  | 'BETTING'
+  | 'SIDESHOW_PENDING';
 
 export interface Pot {
   amount: number;
   eligiblePlayerIds: string[];
 }
 
+export interface TeenPattiConfig {
+  boot: number;
+  // Maximum a single player may pay in one turn, expressed as a multiplier
+  // of the current stake. Defaults to 4 per PRD §2.3.
+  chaalLimitMultiplier: number;
+  // Pot ceiling triggering a forced show, expressed as a multiplier of the
+  // boot amount. Defaults to 128 per PRD §2.3.
+  potLimitMultiplier: number;
+}
+
+export interface PendingSideshow {
+  requesterId: string;
+  targetId: string;
+}
+
 export interface GameState {
   roomCode: string;
   mode: GameMode;
+  variant: GameVariant;
   phase: Phase;
   players: Player[];
   communityCards: Card[];
@@ -69,16 +93,31 @@ export interface GameState {
   turnTimer: number; // seconds per turn (0 = disabled)
   allowPlayersAwardPot: boolean; // whether non-admin players can award the pot
   lastHandSummary: HandSummary | null;
+  // Teen Patti state
+  teenPatti?: TeenPattiConfig;
+  pendingSideshow?: PendingSideshow | null;
+  // Track who issued a CALL_SHOW so we can apply the "show-caller loses on tie"
+  // rule (PRD D1) when resolving the showdown.
+  showCallerId?: string | null;
 }
 
 // ===== Actions =====
 export type PlayerAction =
+  // Poker actions
   | { type: 'FOLD' }
   | { type: 'CHECK' }
   | { type: 'CALL' }
   | { type: 'RAISE'; amount: number }
   | { type: 'ALL_IN' }
-  // Admin/Banker actions
+  // Teen Patti actions
+  | { type: 'PACK' }
+  | { type: 'CHAAL' }
+  | { type: 'RAISE_TP'; amount: number } // amount = total chips paid this turn
+  | { type: 'SEE_CARDS' }
+  | { type: 'REQUEST_SIDESHOW' }
+  | { type: 'RESPOND_SIDESHOW'; accept: boolean }
+  | { type: 'CALL_SHOW' }
+  // Admin/Banker actions (variant-agnostic)
   | { type: 'START_HAND' }
   | { type: 'NEXT_ROUND' } // chip-only: advance betting round
   | { type: 'DECLARE_WINNER'; winnerIds: string[] }
@@ -113,7 +152,7 @@ export interface ServerToClientEvents {
 }
 
 export interface ClientToServerEvents {
-  'create': (data: { playerName: string; mode: GameMode; playerKey?: string }, callback: (response: { roomCode: string; playerId: string }) => void) => void;
+  'create': (data: { playerName: string; mode: GameMode; variant?: GameVariant; playerKey?: string }, callback: (response: { roomCode: string; playerId: string }) => void) => void;
   'join': (data: { playerName: string; roomCode: string; playerKey?: string }, callback: (response: { success: boolean; playerId?: string; error?: string }) => void) => void;
   'action': (data: { roomCode: string; playerId: string; action: PlayerAction }) => void;
   'select-seat': (data: { roomCode: string; playerId: string; seatIndex: number }) => void;
@@ -130,6 +169,10 @@ export interface GameConfig {
   maxPlayers?: number;
   turnTimer?: number;
   allowPlayersAwardPot?: boolean;
+  // Teen Patti
+  boot?: number;
+  chaalLimitMultiplier?: number;
+  potLimitMultiplier?: number;
 }
 
 export interface GameSummary {
@@ -139,6 +182,7 @@ export interface GameSummary {
 
 // ===== Hand Evaluation =====
 export type HandRank =
+  // Poker
   | 'royal-flush'
   | 'straight-flush'
   | 'four-of-a-kind'
@@ -148,7 +192,14 @@ export type HandRank =
   | 'three-of-a-kind'
   | 'two-pair'
   | 'one-pair'
-  | 'high-card';
+  | 'high-card'
+  // Teen Patti (3-card hands)
+  | 'trail'
+  | 'pure-sequence'
+  | 'sequence'
+  | 'color'
+  | 'pair-tp'
+  | 'high-card-tp';
 
 export interface HandResult {
   rank: HandRank;
@@ -171,5 +222,5 @@ export interface HandSummary {
   handNumber: number;
   winners: HandWinner[];
   totalAwarded: number;
-  reason: 'fold' | 'showdown' | 'declared';
+  reason: 'fold' | 'showdown' | 'declared' | 'pack' | 'show' | 'sideshow' | 'pot-limit';
 }

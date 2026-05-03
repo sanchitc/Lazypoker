@@ -52,4 +52,10 @@ CREATE INDEX IF NOT EXISTS actions_player_idx    ON actions (player_key, created
 CREATE INDEX IF NOT EXISTS actions_room_time_idx ON actions (room_code, created_at DESC);
 `,
   },
+  {
+    name: '0002_teen_patti_variant',
+    sql: `
+ALTER TABLE hands ADD COLUMN IF NOT EXISTS variant TEXT NOT NULL DEFAULT 'poker';
+`,
+  },
 ];

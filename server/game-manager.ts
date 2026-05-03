@@ -1,4 +1,4 @@
-import { GameState, GameMode, GameConfig, GameSummary, ChatMessage } from '../common/types.js';
+import { GameState, GameMode, GameVariant, GameConfig, GameSummary, ChatMessage } from '../common/types.js';
 import { createInitialState, addPlayer, removePlayer, selectSeat, processAction, filterStateForPlayer } from './game-engine.js';
 import { generateRoomCode } from './utils.js';
 import { upsertPlayer, startHand, endHand, logAction, logHandWinners } from './db/logger.js';
@@ -18,13 +18,13 @@ interface Room {
 export class GameManager {
   private rooms = new Map<string, Room>();
 
-  createRoom(mode: GameMode): string {
+  createRoom(mode: GameMode, variant: GameVariant = 'poker'): string {
     let roomCode: string;
     do {
       roomCode = generateRoomCode();
     } while (this.rooms.has(roomCode));
 
-    const state = createInitialState(roomCode, mode);
+    const state = createInitialState(roomCode, mode, variant);
     this.rooms.set(roomCode, {
       state: { ...state, phase: 'WAITING' },
       playerSocketMap: new Map(),
@@ -133,6 +133,16 @@ export class GameManager {
     }
     if (config.turnTimer !== undefined) room.state.turnTimer = config.turnTimer;
     if (config.allowPlayersAwardPot !== undefined) room.state.allowPlayersAwardPot = config.allowPlayersAwardPot;
+
+    // Teen Patti tunables. Only meaningful when room.state.variant === 'teen-patti';
+    // ignore them otherwise so a misconfigured client can't add stale fields.
+    if (room.state.variant === 'teen-patti' && room.state.teenPatti) {
+      const tp = { ...room.state.teenPatti };
+      if (config.boot !== undefined) tp.boot = config.boot;
+      if (config.chaalLimitMultiplier !== undefined) tp.chaalLimitMultiplier = config.chaalLimitMultiplier;
+      if (config.potLimitMultiplier !== undefined) tp.potLimitMultiplier = config.potLimitMultiplier;
+      room.state.teenPatti = tp;
+    }
 
     return room.state;
   }

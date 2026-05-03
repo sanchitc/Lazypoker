@@ -3,7 +3,7 @@
  * Each instance simulates one connected browser tab / player.
  */
 import { io as ioClient, Socket } from 'socket.io-client';
-import type { GameState, GameSummary, GameMode, GameConfig, PlayerAction } from '../../common/types.js';
+import type { GameState, GameSummary, GameMode, GameVariant, GameConfig, PlayerAction } from '../../common/types.js';
 
 export class TestClient {
   socket: Socket;
@@ -43,9 +43,9 @@ export class TestClient {
     });
   }
 
-  async create(mode: GameMode): Promise<{ roomCode: string; playerId: string }> {
+  async create(mode: GameMode, variant: GameVariant = 'poker'): Promise<{ roomCode: string; playerId: string }> {
     return new Promise((resolve) => {
-      this.socket.emit('create', { playerName: this.name, mode }, (res: { roomCode: string; playerId: string }) => {
+      this.socket.emit('create', { playerName: this.name, mode, variant }, (res: { roomCode: string; playerId: string }) => {
         this.playerId = res.playerId;
         this.roomCode = res.roomCode;
         resolve(res);

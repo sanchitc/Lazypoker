@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSocket } from '../context/SocketContext';
 import { useGame } from '../context/GameContext';
-import { GameMode } from '@common/types';
+import { GameMode, GameVariant } from '@common/types';
 import { getPlayerKey } from '@/lib/playerKey';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,7 @@ export default function JoinScreen() {
   const { dispatch } = useGame();
   const [name, setName] = useState('');
   const [roomCode, setRoomCode] = useState('');
+  const [variant, setVariant] = useState<GameVariant>('poker');
   const [mode, setMode] = useState<GameMode>('chip-only');
   const [view, setView] = useState<'home' | 'join' | 'create' | 'stats'>('home');
   const [loading, setLoading] = useState(false);
@@ -33,7 +34,7 @@ export default function JoinScreen() {
     if (!socket || !name.trim()) return;
     setLoading(true);
     setError('');
-    socket.emit('create', { playerName: name.trim(), mode, playerKey: getPlayerKey() }, (response) => {
+    socket.emit('create', { playerName: name.trim(), mode, variant, playerKey: getPlayerKey() }, (response) => {
       setLoading(false);
       dispatch({ type: 'SET_PLAYER', playerId: response.playerId, roomCode: response.roomCode });
       window.history.pushState(null, '', `/${response.roomCode}`);
@@ -161,22 +162,43 @@ export default function JoinScreen() {
             </div>
 
             <div className="space-y-2">
-              <Label>Mode</Label>
+              <Label>Game</Label>
               <ToggleGroup
                 type="single"
-                value={mode}
-                onValueChange={(v) => v && setMode(v as GameMode)}
+                value={variant}
+                onValueChange={(v) => v && setVariant(v as GameVariant)}
                 className="w-full"
               >
-                <ToggleGroupItem value="chip-only">Chip Only</ToggleGroupItem>
-                <ToggleGroupItem value="full">Full Game</ToggleGroupItem>
+                <ToggleGroupItem value="poker">Poker</ToggleGroupItem>
+                <ToggleGroupItem value="teen-patti">Teen Patti</ToggleGroupItem>
               </ToggleGroup>
-              <p className="text-[11px] text-bone-dim/70 text-center leading-relaxed pt-1">
-                {mode === 'chip-only'
-                  ? 'Use your own cards. App tracks chips & bets.'
-                  : 'Cards dealt on your phone. Full digital poker.'}
-              </p>
             </div>
+
+            {variant === 'poker' && (
+              <div className="space-y-2">
+                <Label>Mode</Label>
+                <ToggleGroup
+                  type="single"
+                  value={mode}
+                  onValueChange={(v) => v && setMode(v as GameMode)}
+                  className="w-full"
+                >
+                  <ToggleGroupItem value="chip-only">Chip Only</ToggleGroupItem>
+                  <ToggleGroupItem value="full">Full Game</ToggleGroupItem>
+                </ToggleGroup>
+                <p className="text-[11px] text-bone-dim/70 text-center leading-relaxed pt-1">
+                  {mode === 'chip-only'
+                    ? 'Use your own cards. App tracks chips & bets.'
+                    : 'Cards dealt on your phone. Full digital poker.'}
+                </p>
+              </div>
+            )}
+
+            {variant === 'teen-patti' && (
+              <p className="text-[11px] text-bone-dim/70 text-center leading-relaxed">
+                3-card Teen Patti. 2–6 players. Blind/seen, sideshow & show.
+              </p>
+            )}
 
             <Button
               variant="raise"

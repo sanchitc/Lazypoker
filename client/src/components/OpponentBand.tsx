@@ -25,7 +25,7 @@ function getPositionBadge(player: Player, gameState: GameState): string | null {
 function getStatusBadge(player: Player, gameState: GameState):
   | { text: string; variant: 'brass' | 'ember' | 'ivy' | 'muted' }
   | null {
-  if (player.isFolded) return { text: 'FOLD', variant: 'muted' };
+  if (player.isFolded) return { text: gameState.variant === 'teen-patti' ? 'PACK' : 'FOLD', variant: 'muted' };
   if (player.isAllIn) return { text: 'ALL IN', variant: 'brass' };
 
   const isActing = gameState.players[gameState.activePlayerIndex]?.id === player.id;
@@ -37,6 +37,13 @@ function getStatusBadge(player: Player, gameState: GameState):
     if (action.includes('call')) return { text: 'CALL', variant: 'ivy' };
     if (action.includes('raise')) return { text: 'RAISE', variant: 'brass' };
     if (action.includes('bet')) return { text: 'BET', variant: 'brass' };
+    if (action.includes('chaal')) return { text: 'CHAAL', variant: 'ivy' };
+    if (action.includes('see')) return { text: 'SEEN', variant: 'brass' };
+    if (action.includes('sideshow')) return { text: 'SIDE', variant: 'brass' };
+  }
+
+  if (gameState.variant === 'teen-patti') {
+    return { text: player.hasSeenCards ? 'SEEN' : 'BLIND', variant: player.hasSeenCards ? 'brass' : 'muted' };
   }
 
   return null;
@@ -120,8 +127,9 @@ export default function OpponentBand({ opponents, gameState, currentPlayerId: _c
 
           {isShowdown && player.holeCards && (
             <div className="flex gap-0.5">
-              <Card card={player.holeCards[0]} size="sm" />
-              <Card card={player.holeCards[1]} size="sm" />
+              {player.holeCards.map((card, i) => (
+                <Card key={i} card={card} size="sm" />
+              ))}
             </div>
           )}
           </div>

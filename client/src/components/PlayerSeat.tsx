@@ -10,6 +10,8 @@ interface PlayerSeatProps {
   showCards: boolean;
   position: { x: number; y: number };
   actionBadge?: { action: string; amount?: number } | null;
+  cardCount?: number;
+  seenStatus?: 'blind' | 'seen' | null;
 }
 
 function getActionChipStyle(action: string, amount?: number): { label: string; classes: string } | null {
@@ -29,7 +31,7 @@ function getPositionLabel(player: Player): string | null {
   return null;
 }
 
-export default function PlayerSeat({ player, isActive, isCurrentPlayer, showCards, position, actionBadge }: PlayerSeatProps) {
+export default function PlayerSeat({ player, isActive, isCurrentPlayer, showCards, position, actionBadge, cardCount = 2, seenStatus = null }: PlayerSeatProps) {
   const statusClass = player.isFolded
     ? 'opacity-40'
     : !player.isConnected
@@ -105,14 +107,26 @@ export default function PlayerSeat({ player, isActive, isCurrentPlayer, showCard
 
       {showCards && player.holeCards && (
         <div className="flex gap-0.5 mt-1">
-          <Card card={player.holeCards[0]} size="sm" />
-          <Card card={player.holeCards[1]} size="sm" />
+          {player.holeCards.map((card, i) => (
+            <Card key={i} card={card} size="sm" />
+          ))}
         </div>
       )}
       {showCards && !player.holeCards && !player.isFolded && !isCurrentPlayer && (
         <div className="flex gap-0.5 mt-1">
-          <Card card={null} faceDown size="sm" />
-          <Card card={null} faceDown size="sm" />
+          {Array.from({ length: cardCount }).map((_, i) => (
+            <Card key={i} card={null} faceDown size="sm" />
+          ))}
+        </div>
+      )}
+      {seenStatus && (
+        <div className="mt-1">
+          <Badge
+            variant={seenStatus === 'seen' ? 'brass' : 'muted'}
+            className="px-1.5 py-0 text-[8px] tracking-wide h-4"
+          >
+            {seenStatus === 'seen' ? 'SEEN' : 'BLIND'}
+          </Badge>
         </div>
       )}
     </div>

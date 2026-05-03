@@ -29,6 +29,14 @@ export const DEFAULT_CONFIG = {
   maxPlayers: 10,
 };
 
+export const DEFAULT_TEEN_PATTI_CONFIG = {
+  boot: 10,
+  chaalLimitMultiplier: 4,
+  potLimitMultiplier: 128,
+};
+
+export const TEEN_PATTI_MAX_PLAYERS = 6;
+
 export const CHIP_COLORS = [
   { value: 1, color: '#f0f0f0', label: 'White' },
   { value: 5, color: '#e63946', label: 'Red' },

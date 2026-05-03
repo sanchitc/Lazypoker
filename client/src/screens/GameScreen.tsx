@@ -4,6 +4,7 @@ import PlayerSeat from '../components/PlayerSeat';
 import PotDisplay from '../components/PotDisplay';
 import CommunityCards from '../components/CommunityCards';
 import ActionBar from '../components/ActionBar';
+import TeenPattiActionBar from '../components/TeenPattiActionBar';
 import AdminPanel from '../components/AdminPanel';
 import ChipStack from '../components/ChipStack';
 import Card from '../components/Card';
@@ -92,6 +93,7 @@ export default function GameScreen() {
 
   if (!gameState || !playerId || !roomCode || !currentPlayer) return null;
 
+  if (gameState.variant === 'teen-patti') return <TeenPattiLayout />;
   return gameState.mode === 'chip-only' ? <ChipOnlyLayout /> : <FullModeLayout />;
 }
 
@@ -716,6 +718,286 @@ function MobileSelfBar({
           <Card card={currentPlayer.holeCards[1]} size="md" />
         </div>
       )}
+    </div>
+  );
+}
+
+// ============================================================
+// TEEN PATTI LAYOUT
+// ============================================================
+function TeenPattiLayout() {
+  const { gameState, playerId, roomCode, currentPlayer, isAdmin, isMyTurn } = useGame();
+  const { socket } = useSocket();
+  const isWide = useMediaQuery('(min-width: 768px)');
+
+  const turnTimer = gameState?.turnTimer ?? 0;
+  const [timeLeft, setTimeLeft] = useState<number>(turnTimer);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activePlayerIdRef = useRef<string | null>(null);
+
+  const seatedPlayers = useMemo(() =>
+    (gameState?.players ?? [])
+      .filter(p => p.seatIndex >= 0)
+      .sort((a, b) => a.seatIndex - b.seatIndex),
+    [gameState?.players]
+  );
+
+  const opponents = useMemo(() =>
+    seatedPlayers.filter(p => p.id !== playerId),
+    [seatedPlayers, playerId]
+  );
+
+  const positions = useMemo(() => {
+    return getSeatPositions(
+      seatedPlayers.length,
+      seatedPlayers.findIndex(p => p.id === playerId)
+    );
+  }, [seatedPlayers.length, playerId]);
+
+  // Auto-pack on turn timer expiry (PRD D4).
+  useEffect(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (!turnTimer || !isMyTurn || !gameState || gameState.phase === 'HAND_COMPLETE') {
+      setTimeLeft(turnTimer);
+      return;
+    }
+    const activeId = gameState.players[gameState.activePlayerIndex]?.id ?? null;
+    if (activeId !== activePlayerIdRef.current) {
+      activePlayerIdRef.current = activeId;
+      setTimeLeft(turnTimer);
+    }
+    timerRef.current = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current!);
+          socket?.emit('action', {
+            roomCode: roomCode!,
+            playerId: playerId!,
+            action: { type: 'PACK' },
+          });
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [isMyTurn, gameState?.activePlayerIndex, turnTimer, gameState?.phase]);
+
+  const [recentActorId, setRecentActorId] = useState<string | null>(null);
+  const lastActionKey = gameState?.lastAction
+    ? `${gameState.lastAction.playerId}|${gameState.lastAction.action}|${gameState.lastAction.amount ?? ''}`
+    : null;
+  useEffect(() => {
+    if (!gameState?.lastAction) { setRecentActorId(null); return; }
+    setRecentActorId(gameState.lastAction.playerId);
+    const t = setTimeout(() => setRecentActorId(null), 2500);
+    return () => clearTimeout(t);
+  }, [lastActionKey]);
+
+  if (!gameState || !playerId || !roomCode || !currentPlayer) return null;
+
+  const handleNewHand = () => {
+    socket?.emit('action', { roomCode, playerId, action: { type: 'START_HAND' } });
+  };
+  const handleSee = () => {
+    socket?.emit('action', { roomCode, playerId, action: { type: 'SEE_CARDS' } });
+  };
+  const handleShowCards = () => {
+    socket?.emit('action', { roomCode, playerId, action: { type: 'SHOW_CARDS' } });
+  };
+  const handleLeaveGame = () => {
+    localStorage.removeItem('lazypoker_session');
+    socket?.emit('action', { roomCode, playerId, action: { type: 'LEAVE_GAME' } });
+  };
+
+  const isHandComplete = gameState.phase === 'HAND_COMPLETE';
+  const stake = gameState.currentBet;
+  const seen = !!currentPlayer.hasSeenCards;
+  const myChaalCost = stake * (seen ? 2 : 1);
+  const totalPot = gameState.pots.reduce((sum, p) => sum + p.amount, 0);
+  const tpConfig = gameState.teenPatti;
+
+  const chipColor = CHIP_COLORS.reduce((best, chip) =>
+    currentPlayer.chips >= chip.value ? chip : best
+  , CHIP_COLORS[0]);
+
+  return (
+    <div className="game-shell h-full flex flex-col felt-noise vignette mx-auto w-full max-w-6xl">
+      {/* Top bar */}
+      <div className="flex items-center justify-between gap-2 px-3 py-2 bg-ink/28 backdrop-blur-sm brass-hairline-b">
+        <div className="text-[10px] sm:text-xs text-bone-dim font-mono tabular-nums whitespace-nowrap">
+          #{gameState.handNumber} · boot {tpConfig?.boot ?? '—'}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {turnTimer > 0 && isMyTurn && !isHandComplete && (
+            <Badge variant={timeLeft <= 5 ? 'ember' : 'brass'} className={timeLeft <= 5 ? 'animate-pulse' : ''}>
+              {timeLeft}s
+            </Badge>
+          )}
+          <Badge variant="outline">Teen Patti</Badge>
+        </div>
+        <div className="text-[10px] sm:text-xs text-brass font-display tracking-[0.18em] uppercase whitespace-nowrap">
+          Stake {stake.toLocaleString()}
+        </div>
+      </div>
+
+      {isWide ? (
+        // Tablet/desktop: elliptical table
+        <div className="relative flex-1 overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_56%,hsl(var(--felt-rim)/0.12),transparent_40%)]" />
+          <div className="absolute left-[4%] right-[4%] top-[6%] bottom-[7%] rounded-[50%] table-shell" />
+          <div className="absolute left-[5%] right-[5%] top-[7.5%] bottom-[8.5%] rounded-[50%] table-felt" />
+          <div className="absolute left-[12%] right-[12%] top-[18%] bottom-[18%] rounded-[50%] table-spotlight opacity-80" />
+
+          {seatedPlayers.map((player, i) => (
+            <PlayerSeat
+              key={player.id}
+              player={player}
+              isActive={gameState.players[gameState.activePlayerIndex]?.id === player.id}
+              isCurrentPlayer={player.id === playerId}
+              showCards={true}
+              position={positions[i] || { x: 50, y: 50 }}
+              cardCount={3}
+              seenStatus={
+                isHandComplete || !player.holeCards
+                  ? null
+                  : player.hasSeenCards ? 'seen' : 'blind'
+              }
+              actionBadge={
+                recentActorId === player.id && gameState.lastAction
+                  ? gameState.lastAction
+                  : null
+              }
+            />
+          ))}
+
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
+                          flex flex-col items-center gap-3">
+            <PotDisplay pots={gameState.pots} />
+            <div className="surface-pill rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-brass/85">
+              Stake {stake.toLocaleString()}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isWide && !isHandComplete && (
+        <div className="px-3 pb-2">
+          <div className="surface-pill mx-auto flex max-w-xl flex-wrap items-center justify-center gap-3 rounded-[28px] px-4 py-3">
+            {currentPlayer.holeCards && !currentPlayer.isFolded ? (
+              <div className="flex justify-center gap-2">
+                {currentPlayer.holeCards.map((card, i) => (
+                  <Card key={i} card={card} size="lg" />
+                ))}
+              </div>
+            ) : !currentPlayer.isFolded ? (
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <Card key={i} card={null} faceDown size="lg" />
+                  ))}
+                </div>
+                {isMyTurn && (
+                  <Button variant="outline" size="sm" onClick={handleSee}>See</Button>
+                )}
+              </div>
+            ) : null}
+            <div className="rounded-full border border-bone/10 bg-panel-strong/55 px-3 py-2">
+              <ChipStack amount={currentPlayer.chips} size="md" />
+            </div>
+            <Badge variant={seen ? 'brass' : 'muted'} className="text-[10px]">
+              {seen ? 'SEEN' : 'BLIND'} · chaal {myChaalCost.toLocaleString()}
+            </Badge>
+          </div>
+        </div>
+      )}
+
+      {!isWide && (
+        <>
+          <OpponentBand opponents={opponents} gameState={gameState} currentPlayerId={playerId} />
+
+          <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-3 py-2">
+            <div className="absolute inset-x-2 inset-y-2 rounded-[32px] surface-panel-soft" />
+            <div className="absolute inset-x-3.5 inset-y-3.5 rounded-[28px]
+                            bg-[radial-gradient(circle_at_50%_40%,hsl(151_56%_25%)_0%,hsl(var(--felt))_42%,hsl(var(--felt-rim))_84%,hsl(154_43%_13%)_100%)]
+                            border border-bone/6
+                            shadow-[inset_0_0_48px_rgba(0,0,0,0.35)]" />
+
+            <div className="relative z-10 flex flex-col items-center gap-3 w-full">
+              <PotDisplay pots={gameState.pots} />
+              <div className="surface-pill rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-brass/85">
+                Stake {stake.toLocaleString()}
+              </div>
+              {currentPlayer.holeCards && !currentPlayer.isFolded ? (
+                <div className="flex gap-1">
+                  {currentPlayer.holeCards.map((card, i) => (
+                    <Card key={i} card={card} size="md" />
+                  ))}
+                </div>
+              ) : !currentPlayer.isFolded ? (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="flex gap-1">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <Card key={i} card={null} faceDown size="md" />
+                    ))}
+                  </div>
+                  {isMyTurn && (
+                    <Button variant="outline" size="sm" onClick={handleSee}>See cards</Button>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <MobileSelfBar
+            currentPlayer={currentPlayer}
+            position={null}
+            isAdmin={isAdmin}
+            isMyTurn={isMyTurn}
+            chipColor={chipColor.color}
+          />
+        </>
+      )}
+
+      {isHandComplete ? (
+        <div className="control-rail px-3 pb-3 pt-2">
+          <div className="space-y-3 rounded-[26px] surface-panel p-3 text-center mx-auto max-w-2xl">
+            {gameState.lastAction && (
+              <div className="font-display brass-shimmer-text text-lg">
+                {gameState.lastAction.action}
+              </div>
+            )}
+            {isAdmin ? (
+              <Button variant="raise" size="xl" className="w-full" onClick={handleNewHand}>
+                Deal Next Hand
+              </Button>
+            ) : (
+              <div className="text-bone-dim text-xs italic font-display">Waiting for next hand…</div>
+            )}
+            <div className="grid gap-2 sm:grid-cols-2">
+              {currentPlayer.holeCards && (
+                <Button
+                  variant={currentPlayer.wantsToShowCards ? 'host' : 'outline'}
+                  className="w-full"
+                  onClick={handleShowCards}
+                >
+                  {currentPlayer.wantsToShowCards ? 'Hide Cards' : 'Show Cards'}
+                </Button>
+              )}
+              <Button variant="fold" className="w-full" onClick={handleLeaveGame}>
+                Leave Game
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <TeenPattiActionBar />
+      )}
+
+      <AdminPanel />
+      <HandRankings />
+      <ChatPanel />
+      <WinnerBanner gameState={gameState} />
     </div>
   );
 }

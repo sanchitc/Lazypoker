@@ -29,10 +29,10 @@ export async function startHand(state: GameState): Promise<bigint | null> {
   try {
     const numPlayers = state.players.filter(p => !p.isSittingOut).length;
     const { rows } = await pool.query<{ id: string }>(
-      `INSERT INTO hands (room_code, hand_number, mode, small_blind, big_blind, num_players)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO hands (room_code, hand_number, mode, small_blind, big_blind, num_players, variant)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
-      [state.roomCode, state.handNumber, state.mode, state.smallBlind, state.bigBlind, numPlayers]
+      [state.roomCode, state.handNumber, state.mode, state.smallBlind, state.bigBlind, numPlayers, state.variant]
     );
     return BigInt(rows[0].id);
   } catch (err) {
@@ -82,8 +82,14 @@ export function logAction(args: {
 
   const actionType = action.type;
   let amount: number | null = null;
-  if (action.type === 'RAISE') amount = action.amount;
-  else if (action.type === 'CALL' || action.type === 'ALL_IN') {
+  if (action.type === 'RAISE' || action.type === 'RAISE_TP') amount = action.amount;
+  else if (
+    action.type === 'CALL' ||
+    action.type === 'ALL_IN' ||
+    action.type === 'CHAAL' ||
+    action.type === 'REQUEST_SIDESHOW' ||
+    action.type === 'CALL_SHOW'
+  ) {
     amount = prevPlayer.chips - newPlayer.chips;
   }
 

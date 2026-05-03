@@ -8,8 +8,9 @@ import {
 } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
+import { useGame } from '../context/GameContext';
 
-const HAND_RANKINGS = [
+const POKER_RANKINGS = [
   { rank: 1, name: 'Royal Flush', example: 'A♠K♠Q♠J♠T♠' },
   { rank: 2, name: 'Straight Flush', example: 'J♣T♣9♣8♣7♣' },
   { rank: 3, name: 'Four of a Kind', example: '4♠4♥4♦4♣J♠' },
@@ -20,6 +21,15 @@ const HAND_RANKINGS = [
   { rank: 8, name: 'Two Pair', example: 'Q♠Q♥2♣2♥J♠' },
   { rank: 9, name: 'One Pair', example: '8♥8♠A♣K♠5♦' },
   { rank: 10, name: 'High Card', example: 'A♣Q♦J♠4♥3♣' },
+];
+
+const TEEN_PATTI_RANKINGS = [
+  { rank: 1, name: 'Trail (Trio)', example: 'A♠A♥A♦' },
+  { rank: 2, name: 'Pure Sequence', example: 'A♥2♥3♥' },
+  { rank: 3, name: 'Sequence', example: 'A♠2♥3♣' },
+  { rank: 4, name: 'Color', example: 'A♠K♠J♠' },
+  { rank: 5, name: 'Pair', example: 'A♠A♥K♣' },
+  { rank: 6, name: 'High Card', example: 'A♠Q♥J♣' },
 ];
 
 const STORAGE_KEY = 'lazypoker_rankings_hidden';
@@ -40,6 +50,12 @@ function ExampleHand({ text }: { text: string }) {
 }
 
 export default function HandRankings() {
+  const { gameState } = useGame();
+  const isTeenPatti = gameState?.variant === 'teen-patti';
+  const rankings = isTeenPatti ? TEEN_PATTI_RANKINGS : POKER_RANKINGS;
+  const subtitle = isTeenPatti
+    ? "Best to worst — Teen Patti. Sequence beats color; A-2-3 is highest."
+    : "Best to worst — Texas Hold'em.";
   const [open, setOpen] = useState(false);
   const [hidden, setHidden] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -87,12 +103,12 @@ export default function HandRankings() {
         <SheetContent side="right" className="w-[min(320px,calc(100vw-16px))] felt-noise flex flex-col">
           <SheetHeader>
             <SheetTitle>Hand Rankings</SheetTitle>
-            <SheetDescription>Best to worst — Texas Hold'em.</SheetDescription>
+            <SheetDescription>{subtitle}</SheetDescription>
           </SheetHeader>
 
           <ScrollArea className="flex-1 -mx-2">
             <div className="px-2">
-              {HAND_RANKINGS.map(h => (
+              {rankings.map(h => (
                 <div
                   key={h.rank}
                   className="flex items-center gap-3 px-2 py-2.5 rounded-sm hover:bg-bone/5"
