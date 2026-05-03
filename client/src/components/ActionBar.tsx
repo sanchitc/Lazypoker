@@ -185,7 +185,7 @@ export default function ActionBar() {
             </div>
           </div>
         ) : (
-          <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(140px,1fr))]">
+          <div className="grid gap-2 grid-cols-2 sm:[grid-template-columns:repeat(auto-fit,minmax(140px,1fr))]">
             {actions}
           </div>
         )}

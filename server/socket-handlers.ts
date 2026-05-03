@@ -82,12 +82,15 @@ export function setupSocketHandlers(
         return;
       }
 
+      const prevState = gameManager.getRoomState(data.roomCode);
       const state = gameManager.processAction(data.roomCode, data.playerId, data.action);
       if (state) {
         broadcastState(data.roomCode);
 
-        // Check if game ended
-        if (data.action.type === 'END_GAME') {
+        // Only END_GAME ends the game session — and only if the engine actually
+        // accepted it (admin-gated). Comparing references catches refused actions:
+        // the engine returns the same state object when it rejects.
+        if (data.action.type === 'END_GAME' && prevState !== state) {
           const summary = gameManager.getGameSummary(data.roomCode);
           if (summary) {
             io.to(data.roomCode).emit('game:ended', { summary });

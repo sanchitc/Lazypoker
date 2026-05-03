@@ -56,7 +56,7 @@ export default function LobbyScreen() {
   const canStart = seatedPlayers.length >= 2;
 
   return (
-    <div className="h-full flex flex-col p-4 felt-noise vignette">
+    <div className="h-full flex flex-col p-4 felt-noise vignette mx-auto w-full max-w-4xl">
       {/* Header */}
       <div className="text-center mb-4">
         <h2 className="font-display text-3xl font-medium tracking-tight leading-none">
@@ -161,7 +161,7 @@ export default function LobbyScreen() {
 
       {/* Seats Grid */}
       <div className="flex-1 overflow-y-auto scrollbar-brass">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
           {Array.from({ length: gameState.maxPlayers }, (_, i) => {
             const seated = gameState.players.find(p => p.seatIndex === i);
             const isMe = seated?.id === playerId;

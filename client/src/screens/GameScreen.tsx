@@ -15,14 +15,17 @@ import HandRankings from '../components/HandRankings';
 import WinnerBanner from '../components/WinnerBanner';
 import ChatPanel from '../components/ChatPanel';
 import { useSocket } from '../context/SocketContext';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { CHIP_COLORS } from '@common/constants';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import type { GameState, Player } from '@common/types';
 
 function getSeatPositions(totalSeats: number, currentPlayerSeatIndex: number): { x: number; y: number }[] {
   const positions: { x: number; y: number }[] = [];
   const cx = 50, cy = 50;
-  const rx = 38, ry = 28;
+  // Tightened ellipse radii so seats stay clear of the felt rim on narrow viewports.
+  const rx = 36, ry = 30;
 
   for (let i = 0; i < totalSeats; i++) {
     const offset = currentPlayerSeatIndex >= 0 ? currentPlayerSeatIndex : 0;
@@ -53,7 +56,7 @@ function PhaseStepper({ phase }: { phase: string }) {
           return (
             <span
               key={p.key}
-              className="surface-pill rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-brass font-display"
+              className="surface-pill rounded-full px-2 py-0.5 text-[9px] sm:px-2.5 sm:py-1 sm:text-[10px] uppercase tracking-[0.18em] text-brass font-display"
             >
               {p.label}
             </span>
@@ -69,6 +72,19 @@ function PhaseStepper({ phase }: { phase: string }) {
       })}
     </div>
   );
+}
+
+function getPositionLabel(player: Player, gameState: GameState): string | null {
+  if (player.isDealer) return 'D';
+  const seated = gameState.players.filter(p => p.seatIndex >= 0 && !p.isSittingOut);
+  const dealerIdx = seated.findIndex(p => p.isDealer);
+  if (dealerIdx >= 0) {
+    const sbIdx = (dealerIdx + 1) % seated.length;
+    const bbIdx = (dealerIdx + 2) % seated.length;
+    if (seated[sbIdx]?.id === player.id) return 'SB';
+    if (seated[bbIdx]?.id === player.id) return 'BB';
+  }
+  return null;
 }
 
 export default function GameScreen() {
@@ -180,27 +196,16 @@ function ChipOnlyLayout() {
     currentPlayer.chips >= chip.value ? chip : best
   , CHIP_COLORS[0]);
 
-  const currentPlayerPosition = (() => {
-    if (currentPlayer.isDealer) return 'D';
-    const players = gameState.players.filter(p => p.seatIndex >= 0 && !p.isSittingOut);
-    const dealerIdx = players.findIndex(p => p.isDealer);
-    if (dealerIdx >= 0) {
-      const sbIdx = (dealerIdx + 1) % players.length;
-      const bbIdx = (dealerIdx + 2) % players.length;
-      if (players[sbIdx]?.id === currentPlayer.id) return 'SB';
-      if (players[bbIdx]?.id === currentPlayer.id) return 'BB';
-    }
-    return null;
-  })();
+  const currentPlayerPosition = getPositionLabel(currentPlayer, gameState);
 
   return (
-    <div className="game-shell h-full flex flex-col overflow-hidden felt-noise vignette">
+    <div className="game-shell h-full flex flex-col overflow-hidden felt-noise vignette mx-auto w-full max-w-3xl">
       {/* HEADER with phase stepper */}
-      <div className="flex items-center justify-between px-3 py-2 bg-ink/28 backdrop-blur-sm brass-hairline-b">
-        <span className="text-[10px] text-bone-dim font-mono tabular-nums">
+      <div className="flex items-center justify-between gap-2 px-3 py-2 bg-ink/28 backdrop-blur-sm brass-hairline-b">
+        <span className="text-[10px] text-bone-dim font-mono tabular-nums whitespace-nowrap">
           #{gameState.handNumber} · {gameState.smallBlind}/{gameState.bigBlind}
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {turnTimer > 0 && isMyTurn && !isHandComplete && (
             <Badge variant={timeLeft <= 5 ? 'ember' : 'brass'} className={timeLeft <= 5 ? 'animate-pulse' : ''}>
               {timeLeft}s
@@ -215,7 +220,7 @@ function ChipOnlyLayout() {
       <OpponentBand opponents={opponents} gameState={gameState} currentPlayerId={playerId} />
 
       {/* CENTER POT ZONE — felt surface elevated on near-black page bg */}
-      <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-4">
+      <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-4 py-2">
         <div className="absolute inset-x-3 inset-y-3 rounded-[32px] surface-panel-soft" />
         <div className="absolute inset-x-5 inset-y-5 rounded-[28px]
                         bg-[radial-gradient(circle_at_50%_40%,hsl(151_56%_25%)_0%,hsl(var(--felt))_42%,hsl(var(--felt-rim))_84%,hsl(154_43%_13%)_100%)]
@@ -239,18 +244,18 @@ function ChipOnlyLayout() {
       </div>
 
       {/* MY INFO BAR */}
-      <div className="flex items-center justify-between px-3 py-2 bg-ink/24 backdrop-blur-sm brass-hairline-t">
-        <div className="flex items-center gap-2">
-          <div className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold
+      <div className="flex items-center justify-between gap-2 px-3 py-2 bg-ink/24 backdrop-blur-sm brass-hairline-t">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-bold
             shadow-md shadow-ink/40
             ${isMyTurn
               ? 'border-brass/42 bg-gradient-to-b from-felt-rim to-panel-strong text-bone ring-2 ring-brass/22 ring-pulse'
               : 'border-bone/10 bg-gradient-to-b from-panel-soft to-panel-strong text-bone'}`}>
             {currentPlayer.name[0].toUpperCase()}
           </div>
-          <div className="flex flex-col leading-tight">
+          <div className="flex flex-col leading-tight min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-xs font-medium text-bone">{currentPlayer.name}</span>
+              <span className="text-xs font-medium text-bone truncate max-w-[100px] sm:max-w-none">{currentPlayer.name}</span>
               {currentPlayerPosition && (
                 <Badge variant="brass" className="px-1 py-0 text-[8px] h-3.5 tracking-tight">
                   {currentPlayerPosition}
@@ -260,7 +265,7 @@ function ChipOnlyLayout() {
             </div>
             <div className="flex items-center gap-1">
               <div
-                className="w-2.5 h-2.5 rounded-full border border-bone/20"
+                className="w-2.5 h-2.5 rounded-full border border-bone/20 shrink-0"
                 style={{ backgroundColor: chipColor.color }}
               />
               <span className="text-xs font-mono font-semibold tabular-nums text-bone-dim">
@@ -295,9 +300,7 @@ function ChipOnlyLayout() {
           onTogglePlayerAward={handleTogglePlayerAward}
         />
       ) : (
-        <div>
-          <ChipOnlyActionZone />
-        </div>
+        <ChipOnlyActionZone />
       )}
 
       <AdminPanel />
@@ -335,7 +338,7 @@ function HandCompleteZone({
 
   return (
     <div className="control-rail px-3 pb-3 pt-2">
-      <div className="space-y-2 rounded-[26px] surface-panel p-3">
+      <div className="space-y-2 rounded-[26px] surface-panel p-3 mx-auto max-w-2xl">
       {gameState.lastAction && (
         <div className="font-display brass-shimmer-text text-center text-base">
           {gameState.lastAction.action}
@@ -428,6 +431,7 @@ function HandCompleteZone({
 function FullModeLayout() {
   const { gameState, playerId, roomCode, currentPlayer, isAdmin, isMyTurn } = useGame();
   const { socket } = useSocket();
+  const isWide = useMediaQuery('(min-width: 768px)');
 
   const turnTimer = gameState?.turnTimer ?? 0;
   const [timeLeft, setTimeLeft] = useState<number>(turnTimer);
@@ -439,6 +443,11 @@ function FullModeLayout() {
       .filter(p => p.seatIndex >= 0)
       .sort((a, b) => a.seatIndex - b.seatIndex),
     [gameState?.players]
+  );
+
+  const opponents = useMemo(() =>
+    seatedPlayers.filter(p => p.id !== playerId),
+    [seatedPlayers, playerId]
   );
 
   const positions = useMemo(() => {
@@ -501,15 +510,22 @@ function FullModeLayout() {
     socket?.emit('action', { roomCode, playerId, action: { type: 'LEAVE_GAME' } });
   };
 
+  const isHandComplete = gameState.phase === 'HAND_COMPLETE';
+  const currentPlayerPosition = getPositionLabel(currentPlayer, gameState);
+
+  const chipColor = CHIP_COLORS.reduce((best, chip) =>
+    currentPlayer.chips >= chip.value ? chip : best
+  , CHIP_COLORS[0]);
+
   return (
-    <div className="game-shell h-full flex flex-col felt-noise vignette">
+    <div className="game-shell h-full flex flex-col felt-noise vignette mx-auto w-full max-w-6xl">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-3 py-2 bg-ink/28 backdrop-blur-sm brass-hairline-b">
-        <div className="text-xs text-bone-dim font-mono tabular-nums">
+      <div className="flex items-center justify-between gap-2 px-3 py-2 bg-ink/28 backdrop-blur-sm brass-hairline-b">
+        <div className="text-[10px] sm:text-xs text-bone-dim font-mono tabular-nums whitespace-nowrap">
           #{gameState.handNumber} · {gameState.smallBlind}/{gameState.bigBlind}
         </div>
-        <div className="flex items-center gap-2">
-          {turnTimer > 0 && isMyTurn && gameState.phase !== 'HAND_COMPLETE' && (
+        <div className="flex items-center gap-2 shrink-0">
+          {turnTimer > 0 && isMyTurn && !isHandComplete && (
             <Badge variant={timeLeft <= 5 ? 'ember' : 'brass'} className={timeLeft <= 5 ? 'animate-pulse' : ''}>
               {timeLeft}s
             </Badge>
@@ -519,54 +535,86 @@ function FullModeLayout() {
         <PhaseStepper phase={gameState.phase} />
       </div>
 
-      {/* Table area */}
-      <div className="relative flex-1 overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_56%,hsl(var(--felt-rim)/0.12),transparent_40%)]" />
-        <div className="absolute left-[3.25%] right-[3.25%] top-[8.5%] bottom-[9%] rounded-[50%] table-shell" />
-        <div className="absolute left-[4.2%] right-[4.2%] top-[9.5%] bottom-[10%] rounded-[50%] table-felt" />
-        <div className="absolute left-[10%] right-[10%] top-[18%] bottom-[18%] rounded-[50%] table-spotlight opacity-80" />
+      {isWide ? (
+        // ====== TABLET / DESKTOP: Elliptical poker table ======
+        <div className="relative flex-1 overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_56%,hsl(var(--felt-rim)/0.12),transparent_40%)]" />
+          <div className="absolute left-[4%] right-[4%] top-[6%] bottom-[7%] rounded-[50%] table-shell" />
+          <div className="absolute left-[5%] right-[5%] top-[7.5%] bottom-[8.5%] rounded-[50%] table-felt" />
+          <div className="absolute left-[12%] right-[12%] top-[18%] bottom-[18%] rounded-[50%] table-spotlight opacity-80" />
 
-        {seatedPlayers.map((player, i) => (
-          <PlayerSeat
-            key={player.id}
-            player={player}
-            isActive={gameState.players[gameState.activePlayerIndex]?.id === player.id}
-            isCurrentPlayer={player.id === playerId}
-            showCards={true}
-            position={positions[i] || { x: 50, y: 50 }}
-            actionBadge={
-              recentActorId === player.id && gameState.lastAction
-                ? gameState.lastAction
-                : null
-            }
-          />
-        ))}
+          {seatedPlayers.map((player, i) => (
+            <PlayerSeat
+              key={player.id}
+              player={player}
+              isActive={gameState.players[gameState.activePlayerIndex]?.id === player.id}
+              isCurrentPlayer={player.id === playerId}
+              showCards={true}
+              position={positions[i] || { x: 50, y: 50 }}
+              actionBadge={
+                recentActorId === player.id && gameState.lastAction
+                  ? gameState.lastAction
+                  : null
+              }
+            />
+          ))}
 
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
-                        flex flex-col items-center gap-2">
-          <PotDisplay pots={gameState.pots} />
-          <CommunityCards cards={gameState.communityCards} />
-        </div>
-      </div>
-
-      <div className="px-3 pb-2">
-        <div className="surface-pill mx-auto flex max-w-xl flex-wrap items-center justify-center gap-3 rounded-[28px] px-4 py-3">
-          {currentPlayer.holeCards && !currentPlayer.isFolded && (
-            <div className="flex justify-center gap-2">
-              <Card card={currentPlayer.holeCards[0]} size="lg" />
-              <Card card={currentPlayer.holeCards[1]} size="lg" />
-            </div>
-          )}
-          <div className="rounded-full border border-bone/10 bg-panel-strong/55 px-3 py-2">
-            <ChipStack amount={currentPlayer.chips} size="md" />
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
+                          flex flex-col items-center gap-3">
+            <PotDisplay pots={gameState.pots} />
+            <CommunityCards cards={gameState.communityCards} />
           </div>
         </div>
-      </div>
+      ) : null}
+
+      {isWide && !isHandComplete && (
+        <div className="px-3 pb-2">
+          <div className="surface-pill mx-auto flex max-w-xl flex-wrap items-center justify-center gap-3 rounded-[28px] px-4 py-3">
+            {currentPlayer.holeCards && !currentPlayer.isFolded && (
+              <div className="flex justify-center gap-2">
+                <Card card={currentPlayer.holeCards[0]} size="lg" />
+                <Card card={currentPlayer.holeCards[1]} size="lg" />
+              </div>
+            )}
+            <div className="rounded-full border border-bone/10 bg-panel-strong/55 px-3 py-2">
+              <ChipStack amount={currentPlayer.chips} size="md" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!isWide && (
+        // ====== MOBILE: Stacked layout (band + felt center + self bar) ======
+        <>
+          <OpponentBand opponents={opponents} gameState={gameState} currentPlayerId={playerId} />
+
+          <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-3 py-2">
+            <div className="absolute inset-x-2 inset-y-2 rounded-[32px] surface-panel-soft" />
+            <div className="absolute inset-x-3.5 inset-y-3.5 rounded-[28px]
+                            bg-[radial-gradient(circle_at_50%_40%,hsl(151_56%_25%)_0%,hsl(var(--felt))_42%,hsl(var(--felt-rim))_84%,hsl(154_43%_13%)_100%)]
+                            border border-bone/6
+                            shadow-[inset_0_0_48px_rgba(0,0,0,0.35)]" />
+
+            <div className="relative z-10 flex flex-col items-center gap-4 w-full">
+              <PotDisplay pots={gameState.pots} />
+              <CommunityCards cards={gameState.communityCards} />
+            </div>
+          </div>
+
+          <MobileSelfBar
+            currentPlayer={currentPlayer}
+            position={currentPlayerPosition}
+            isAdmin={isAdmin}
+            isMyTurn={isMyTurn}
+            chipColor={chipColor.color}
+          />
+        </>
+      )}
 
       {/* Actions */}
-      {gameState.phase === 'HAND_COMPLETE' ? (
+      {isHandComplete ? (
         <div className="control-rail px-3 pb-3 pt-2">
-          <div className="space-y-3 rounded-[26px] surface-panel p-3 text-center">
+          <div className="space-y-3 rounded-[26px] surface-panel p-3 text-center mx-auto max-w-2xl">
             {gameState.lastAction && (
               <div className="font-display brass-shimmer-text text-lg">
                 {gameState.lastAction.action}
@@ -606,3 +654,69 @@ function FullModeLayout() {
     </div>
   );
 }
+
+// ============================================================
+// MOBILE SELF BAR — avatar/name/chips + hole cards prominent
+// ============================================================
+function MobileSelfBar({
+  currentPlayer,
+  position,
+  isAdmin,
+  isMyTurn,
+  chipColor,
+}: {
+  currentPlayer: Player;
+  position: string | null;
+  isAdmin: boolean;
+  isMyTurn: boolean;
+  chipColor: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 px-3 py-2 bg-ink/24 backdrop-blur-sm brass-hairline-t">
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-xs font-bold
+          shadow-md shadow-ink/40
+          ${isMyTurn
+            ? 'border-brass/42 bg-gradient-to-b from-felt-rim to-panel-strong text-bone ring-2 ring-brass/22 ring-pulse'
+            : 'border-bone/10 bg-gradient-to-b from-panel-soft to-panel-strong text-bone'}`}>
+          {currentPlayer.name[0].toUpperCase()}
+        </div>
+        <div className="flex flex-col leading-tight min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium text-bone truncate max-w-[90px]">
+              {currentPlayer.name}
+            </span>
+            {position && (
+              <Badge variant="brass" className="px-1 py-0 text-[8px] h-3.5 tracking-tight">
+                {position}
+              </Badge>
+            )}
+            {isAdmin && <span className="text-brass text-[10px]">★</span>}
+          </div>
+          <div className="flex items-center gap-1">
+            <div
+              className="w-2.5 h-2.5 rounded-full border border-bone/20 shrink-0"
+              style={{ backgroundColor: chipColor }}
+            />
+            <span className="text-xs font-mono font-semibold tabular-nums text-bone-dim">
+              {currentPlayer.chips.toLocaleString()}
+            </span>
+            {currentPlayer.currentBet > 0 && (
+              <span className="text-[9px] text-brass/70 font-mono tabular-nums">
+                (bet {currentPlayer.currentBet.toLocaleString()})
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {currentPlayer.holeCards && !currentPlayer.isFolded && (
+        <div className="flex shrink-0 gap-1">
+          <Card card={currentPlayer.holeCards[0]} size="md" />
+          <Card card={currentPlayer.holeCards[1]} size="md" />
+        </div>
+      )}
+    </div>
+  );
+}
+

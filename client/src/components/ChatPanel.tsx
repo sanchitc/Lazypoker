@@ -14,6 +14,25 @@ interface DecryptedMessage {
   failed?: boolean;
 }
 
+const BUBBLE_SIZE = 44;
+const PANEL_W = 320;
+const PANEL_H = 384;
+const MARGIN = 8;
+const DRAG_THRESHOLD_SQ = 36; // 6px
+
+function clampPos(x: number, y: number): { x: number; y: number } {
+  const maxX = Math.max(MARGIN, window.innerWidth - BUBBLE_SIZE - MARGIN);
+  const maxY = Math.max(MARGIN, window.innerHeight - BUBBLE_SIZE - MARGIN);
+  return {
+    x: Math.min(maxX, Math.max(MARGIN, x)),
+    y: Math.min(maxY, Math.max(MARGIN, y)),
+  };
+}
+
+function defaultBubblePos() {
+  return clampPos(window.innerWidth - BUBBLE_SIZE - 12, 68);
+}
+
 export default function ChatPanel() {
   const { socket } = useSocket();
   const { roomCode, playerId } = useGame();
@@ -22,9 +41,18 @@ export default function ChatPanel() {
   const [draft, setDraft] = useState('');
   const [unread, setUnread] = useState(0);
   const [sending, setSending] = useState(false);
+  const [pos, setPos] = useState(() => defaultBubblePos());
   const scrollRef = useRef<HTMLDivElement>(null);
   const openRef = useRef(open);
   openRef.current = open;
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    origX: number;
+    origY: number;
+    moved: boolean;
+  } | null>(null);
+  const suppressClickRef = useRef(false);
 
   useEffect(() => {
     if (!socket || !roomCode) return;
@@ -101,6 +129,84 @@ export default function ChatPanel() {
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
+  // Re-clamp bubble position on viewport resize / rotation.
+  useEffect(() => {
+    const onResize = () => setPos(p => clampPos(p.x, p.y));
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  // Double-tap on a non-interactive area toggles chat. Guarded against the
+  // chat itself, the action bar, and any interactive control so that a
+  // mistimed double-tap on All-In / chip rail / etc. never opens chat.
+  useEffect(() => {
+    const NO_TAP =
+      '[data-chat-root], [data-chat-bubble], .control-rail, button, a, input, textarea, select, [role="button"], [role="slider"]';
+    let last = { t: 0, x: 0, y: 0 };
+    const onDown = (e: PointerEvent) => {
+      const target = e.target as Element | null;
+      if (!target || target.closest?.(NO_TAP)) return;
+      const now = performance.now();
+      const dt = now - last.t;
+      const dx = e.clientX - last.x;
+      const dy = e.clientY - last.y;
+      if (dt < 300 && dx * dx + dy * dy < 900) {
+        setOpen(o => !o);
+        last = { t: 0, x: 0, y: 0 };
+      } else {
+        last = { t: now, x: e.clientX, y: e.clientY };
+      }
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, []);
+
+  const onDragStart = (e: React.PointerEvent<HTMLElement>) => {
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: pos.x,
+      origY: pos.y,
+      moved: false,
+    };
+  };
+
+  const onDragMove = (e: React.PointerEvent<HTMLElement>) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const dx = e.clientX - d.startX;
+    const dy = e.clientY - d.startY;
+    if (!d.moved && dx * dx + dy * dy > DRAG_THRESHOLD_SQ) d.moved = true;
+    if (d.moved) setPos(clampPos(d.origX + dx, d.origY + dy));
+  };
+
+  const onDragEnd = (e: React.PointerEvent<HTMLElement>) => {
+    const d = dragRef.current;
+    if (!d) return;
+    if (d.moved) suppressClickRef.current = true;
+    dragRef.current = null;
+    try { (e.currentTarget as Element).releasePointerCapture(e.pointerId); } catch { /* noop */ }
+  };
+
+  const onBubbleClick = () => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    setOpen(o => !o);
+  };
+
+  // Pick which corner of the bubble the panel grows from so it stays on screen.
+  const panelLeft =
+    pos.x + BUBBLE_SIZE + PANEL_W > window.innerWidth - MARGIN
+      ? Math.max(MARGIN, pos.x + BUBBLE_SIZE - PANEL_W)
+      : pos.x;
+  const panelTop =
+    pos.y + BUBBLE_SIZE + PANEL_H > window.innerHeight - MARGIN
+      ? Math.max(MARGIN, pos.y - PANEL_H - 8)
+      : pos.y + BUBBLE_SIZE + 8;
+
   const handleSend = async () => {
     const text = draft.trim();
     if (!text || !socket || !roomCode || !playerId || sending) return;
@@ -127,47 +233,62 @@ export default function ChatPanel() {
 
   return (
     <>
-      {/* Floating toggle button — anchored to bottom-right, sits above the
-          action bar so it never overlaps. pointer-events scoped to the button
-          itself so the rest of the table remains clickable. */}
+      {/* Floating draggable bubble. Defaults to top-right under the header.
+          Drag to reposition; tap to toggle. Hidden when the panel is open. */}
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
+        data-chat-bubble
+        onClick={onBubbleClick}
+        onPointerDown={onDragStart}
+        onPointerMove={onDragMove}
+        onPointerUp={onDragEnd}
+        onPointerCancel={onDragEnd}
         aria-label={open ? 'Close chat' : 'Open chat'}
-        className={`fixed right-3 bottom-24 z-40 flex h-11 w-11 items-center justify-center
+        style={{ left: pos.x, top: pos.y }}
+        className={`fixed z-40 flex h-11 w-11 items-center justify-center
                     rounded-full border border-brass/35
                     bg-gradient-to-b from-panel-soft to-panel-strong
-                    text-bone shadow-lg shadow-ink/50
-                    transition-all hover:border-brass/60 active:scale-95
+                    text-bone shadow-lg shadow-ink/50 touch-none select-none
+                    transition-[opacity,transform] duration-150
+                    hover:border-brass/60 active:scale-95
                     ${open ? 'opacity-0 pointer-events-none scale-90' : 'opacity-100 scale-100'}`}
       >
-        <MessageCircle className="h-5 w-5 text-brass" />
+        <MessageCircle className="h-5 w-5 text-brass pointer-events-none" />
         {unread > 0 && (
           <span className="absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] items-center justify-center
                            rounded-full bg-ember px-1 text-[10px] font-bold text-bone
-                           shadow-md shadow-ink/50 animate-scale-pop">
+                           shadow-md shadow-ink/50 animate-scale-pop pointer-events-none">
             {unread > 9 ? '9+' : unread}
           </span>
         )}
       </button>
 
-      {/* Chat panel — fixed overlay. Doesn't block the action bar (action bar
-          is full-width at the bottom; panel sits above it on the right). */}
+      {/* Chat panel — fixed overlay. Anchored next to the bubble; drag the
+          header to reposition (bubble follows). */}
       <div
-        className={`fixed right-3 bottom-24 z-40
+        data-chat-root
+        style={{ left: panelLeft, top: panelTop }}
+        className={`fixed z-40
                     w-[min(20rem,calc(100vw-1.5rem))] h-[min(24rem,60vh)]
                     flex flex-col overflow-hidden rounded-2xl
                     border border-brass/30 bg-panel/95 backdrop-blur-md
                     shadow-2xl shadow-ink/60
-                    origin-bottom-right transition-all duration-150
+                    transition-[opacity,transform] duration-150
                     ${open
                       ? 'opacity-100 scale-100 pointer-events-auto'
                       : 'opacity-0 scale-95 pointer-events-none'}`}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-brass/20
-                        bg-ink/40 px-3 py-2">
-          <div className="flex items-center gap-1.5">
+        {/* Header — drag handle */}
+        <div
+          onPointerDown={onDragStart}
+          onPointerMove={onDragMove}
+          onPointerUp={onDragEnd}
+          onPointerCancel={onDragEnd}
+          className="flex items-center justify-between border-b border-brass/20
+                     bg-ink/40 px-3 py-2 cursor-grab active:cursor-grabbing
+                     touch-none select-none"
+        >
+          <div className="flex items-center gap-1.5 pointer-events-none">
             <MessageCircle className="h-3.5 w-3.5 text-brass" />
             <span className="font-display text-[11px] uppercase tracking-[0.18em] text-brass">
               Table Chat
@@ -179,6 +300,7 @@ export default function ChatPanel() {
           <button
             type="button"
             onClick={() => setOpen(false)}
+            onPointerDown={e => e.stopPropagation()}
             aria-label="Close chat"
             className="flex h-6 w-6 items-center justify-center rounded-full
                        text-bone-dim hover:text-bone hover:bg-bone/8 transition-colors"
