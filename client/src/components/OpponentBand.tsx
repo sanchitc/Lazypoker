@@ -29,6 +29,23 @@ function getStatusBadge(player: Player, gameState: GameState):
   if (player.isAllIn) return { text: 'ALL IN', variant: 'brass' };
 
   const isActing = gameState.players[gameState.activePlayerIndex]?.id === player.id;
+
+  // Teen Patti: SEEN/BLIND is the meaningful persistent badge — whose turn it is
+  // is already conveyed by the bubble's ring-pulse highlight. Show transient
+  // action labels when this player just acted, otherwise fall through to
+  // SEEN/BLIND so opponents see SEEN immediately on a SEE_CARDS action.
+  if (gameState.variant === 'teen-patti') {
+    if (gameState.lastAction?.playerId === player.id) {
+      const action = gameState.lastAction.action.toLowerCase();
+      if (action.includes('chaal')) return { text: 'CHAAL', variant: 'ivy' };
+      if (action.includes('raise')) return { text: 'RAISE', variant: 'brass' };
+      if (action.includes('bet')) return { text: 'BET', variant: 'brass' };
+      if (action.includes('see')) return { text: 'SEEN', variant: 'brass' };
+      if (action.includes('sideshow')) return { text: 'SIDE', variant: 'brass' };
+    }
+    return { text: player.hasSeenCards ? 'SEEN' : 'BLIND', variant: player.hasSeenCards ? 'brass' : 'muted' };
+  }
+
   if (isActing) return { text: 'TURN', variant: 'brass' };
 
   if (gameState.lastAction?.playerId === player.id) {
@@ -37,13 +54,6 @@ function getStatusBadge(player: Player, gameState: GameState):
     if (action.includes('call')) return { text: 'CALL', variant: 'ivy' };
     if (action.includes('raise')) return { text: 'RAISE', variant: 'brass' };
     if (action.includes('bet')) return { text: 'BET', variant: 'brass' };
-    if (action.includes('chaal')) return { text: 'CHAAL', variant: 'ivy' };
-    if (action.includes('see')) return { text: 'SEEN', variant: 'brass' };
-    if (action.includes('sideshow')) return { text: 'SIDE', variant: 'brass' };
-  }
-
-  if (gameState.variant === 'teen-patti') {
-    return { text: player.hasSeenCards ? 'SEEN' : 'BLIND', variant: player.hasSeenCards ? 'brass' : 'muted' };
   }
 
   return null;
@@ -51,8 +61,6 @@ function getStatusBadge(player: Player, gameState: GameState):
 
 export default function OpponentBand({ opponents, gameState, currentPlayerId: _currentPlayerId }: OpponentBandProps) {
   if (opponents.length === 0) return null;
-
-  const isShowdown = gameState.phase === 'SHOWDOWN' || gameState.phase === 'HAND_COMPLETE';
 
   return (
     <div className="flex justify-center gap-2 overflow-x-auto px-3 py-2 scrollbar-hide bg-ink/24 backdrop-blur-sm brass-hairline-b">
@@ -125,7 +133,7 @@ export default function OpponentBand({ opponents, gameState, currentPlayerId: _c
             )}
           </div>
 
-          {isShowdown && player.holeCards && (
+          {player.holeCards && (
             <div className="flex gap-0.5">
               {player.holeCards.map((card, i) => (
                 <Card key={i} card={card} size="sm" />

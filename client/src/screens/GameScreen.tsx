@@ -1,4 +1,5 @@
 import { useMemo, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { useGame } from '../context/GameContext';
 import PlayerSeat from '../components/PlayerSeat';
 import PotDisplay from '../components/PotDisplay';
@@ -714,8 +715,9 @@ function MobileSelfBar({
 
       {currentPlayer.holeCards && !currentPlayer.isFolded && (
         <div className="flex shrink-0 gap-1">
-          <Card card={currentPlayer.holeCards[0]} size="md" />
-          <Card card={currentPlayer.holeCards[1]} size="md" />
+          {currentPlayer.holeCards.map((card, i) => (
+            <Card key={i} card={card} size="md" />
+          ))}
         </div>
       )}
     </div>
@@ -793,6 +795,32 @@ function TeenPattiLayout() {
     const t = setTimeout(() => setRecentActorId(null), 2500);
     return () => clearTimeout(t);
   }, [lastActionKey]);
+
+  // Sideshow resolution toasts. We track the previous pending sideshow and
+  // fire when it transitions to null so we can read lastAction (already
+  // broadcast) to determine whether the response was a decline or an accept.
+  const prevPendingRef = useRef(gameState?.pendingSideshow ?? null);
+  useEffect(() => {
+    const prev = prevPendingRef.current;
+    const curr = gameState?.pendingSideshow ?? null;
+    prevPendingRef.current = curr;
+    if (!prev || curr) return;
+    const last = gameState?.lastAction;
+    if (!last) return;
+    const requester = gameState?.players.find(p => p.id === prev.requesterId);
+    const target = gameState?.players.find(p => p.id === prev.targetId);
+    if (last.action === 'sideshow declined' && prev.requesterId === playerId) {
+      toast.info(`${target?.name ?? 'Opponent'} declined your sideshow`);
+    } else if (last.action === 'sideshow lost — packs') {
+      const loserId = last.playerId;
+      const winnerId = loserId === prev.requesterId ? prev.targetId : prev.requesterId;
+      const winner = gameState?.players.find(p => p.id === winnerId);
+      const loser = loserId === requester?.id ? requester : target;
+      if (winner && loser) {
+        toast.info(`${winner.name} won sideshow over ${loser.name}`);
+      }
+    }
+  }, [gameState?.pendingSideshow, gameState?.lastAction, gameState?.players, playerId]);
 
   if (!gameState || !playerId || !roomCode || !currentPlayer) return null;
 

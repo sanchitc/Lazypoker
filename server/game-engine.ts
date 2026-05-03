@@ -887,13 +887,19 @@ export function filterStateForPlayer(state: GameState, playerId: string): GameSt
 
       // Reveal own cards always except in Teen Patti while still blind (FR-14).
       // Reveal opponents' cards only at showdown when they didn't pack, or
-      // when they explicitly toggled wantsToShowCards.
+      // when they explicitly toggled wantsToShowCards. Teen Patti also
+      // grants per-hand sideshow peeks: the requester sees the responder's
+      // cards (asymmetric) for the rest of the hand once a sideshow accepts.
       const isOwn = p.id === playerId;
       const ownCanSee = !isTeenPatti || !!p.hasSeenCards;
+      const grantedReveal = (state.sideshowReveals ?? []).some(
+        r => r.viewerId === playerId && r.subjectId === p.id
+      );
       const visible =
         (isOwn && ownCanSee) ||
         (isShowdown && !p.isFolded) ||
-        p.wantsToShowCards;
+        p.wantsToShowCards ||
+        grantedReveal;
 
       return {
         ...rest,
@@ -951,6 +957,7 @@ function startTeenPattiHand(state: GameState): GameState {
   s.bettingRound = 0;
   s.actedThisRound = [];
   s.pendingSideshow = null;
+  s.sideshowReveals = [];
   s.showCallerId = null;
   for (const p of s.players) {
     p.currentBet = 0;
@@ -960,6 +967,7 @@ function startTeenPattiHand(state: GameState): GameState {
     p.holeCards = null;
     p.wantsToShowCards = false;
     p.hasSeenCards = false;
+    p.sideshowDeclined = false;
   }
 
   s = rotateDealerButton(s);
@@ -1119,6 +1127,7 @@ function tpRequestSideshow(state: GameState, playerIndex: number): GameState {
   const player = state.players[playerIndex];
   if (player.isFolded) return state;
   if (!player.hasSeenCards) return state;
+  if (player.sideshowDeclined) return state;
 
   const active = getTeenPattiActivePlayers(state);
   if (active.length < 3) return state; // sideshow disabled in heads-up
@@ -1127,8 +1136,9 @@ function tpRequestSideshow(state: GameState, playerIndex: number): GameState {
   if (!target) return state;
   if (!target.hasSeenCards) return state;
 
-  // Sideshow fee = 1× current stake (paid into pot).
-  const cost = state.currentBet;
+  // Sideshow fee matches chaal cost — keeps the two in lockstep if the
+  // seen-only restriction is ever lifted (currently always 2× stake).
+  const cost = (player.hasSeenCards ? 2 : 1) * state.currentBet;
   if (cost > player.chips) return state;
 
   return {
@@ -1166,6 +1176,9 @@ function tpRespondSideshow(state: GameState, playerIndex: number, accept: boolea
       ...state,
       pendingSideshow: null,
       phase: 'BETTING',
+      players: state.players.map((p, i) =>
+        i === requesterIndex ? { ...p, sideshowDeclined: true } : p
+      ),
       lastAction: { playerId: responder.id, action: 'sideshow declined' },
     };
   }
@@ -1185,6 +1198,12 @@ function tpRespondSideshow(state: GameState, playerIndex: number, accept: boolea
     players: state.players.map((p, i) =>
       i === loserIndex ? { ...p, isFolded: true } : p
     ),
+    // The requester paid for the peek and gets to see the responder's cards
+    // for the rest of the hand, regardless of who won the comparison.
+    sideshowReveals: [
+      ...(state.sideshowReveals ?? []),
+      { viewerId: requester.id, subjectId: responder.id },
+    ],
     lastAction: { playerId: loser.id, action: 'sideshow lost — packs' },
   };
 

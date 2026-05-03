@@ -27,6 +27,10 @@ export interface Player {
   // Teen Patti: true once the player has chosen to look at their cards.
   // Server filters out their own holeCards until this flips to true (FR-14).
   hasSeenCards?: boolean;
+  // Teen Patti: set when a sideshow this player requested was declined.
+  // Blocks any further sideshow request from this player for the rest of
+  // the hand. Reset on each new deal.
+  sideshowDeclined?: boolean;
   // Stable client-generated id (localStorage). Used for analytics aggregation
   // across rooms/sessions. Server-only field; filtered out before sending state.
   playerKey?: string;
@@ -96,6 +100,11 @@ export interface GameState {
   // Teen Patti state
   teenPatti?: TeenPattiConfig;
   pendingSideshow?: PendingSideshow | null;
+  // Per-hand registry of sideshow-granted card peeks. When a sideshow is
+  // accepted, the requester gains the right to see the responder's cards
+  // (asymmetric — the responder does not see the requester's). Cleared at
+  // the start of each new hand.
+  sideshowReveals?: Array<{ viewerId: string; subjectId: string }>;
   // Track who issued a CALL_SHOW so we can apply the "show-caller loses on tie"
   // rule (PRD D1) when resolving the showdown.
   showCallerId?: string | null;

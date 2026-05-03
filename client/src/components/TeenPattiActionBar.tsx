@@ -37,7 +37,8 @@ export default function TeenPattiActionBar() {
       if (!prev) prev = sorted[sorted.length - 1];
       prevSeenAvailable = !!prev?.hasSeenCards;
     }
-    const isSideshowEligible = seen && activeCount >= 3 && prevSeenAvailable;
+    const isSideshowEligible =
+      seen && activeCount >= 3 && prevSeenAvailable && !currentPlayer.sideshowDeclined;
 
     // Show: only with exactly 2 active players. Seen-vs-blind by seen caller forbidden.
     let isShowEligible = false;
@@ -80,6 +81,21 @@ export default function TeenPattiActionBar() {
             <Button variant="fold" size="lg" onClick={() => sendAction({ type: 'RESPOND_SIDESHOW', accept: false })}>
               Decline
             </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Requester sees a waiting pill instead of the regular action bar while
+  // the target decides — otherwise the still-active action bar is misleading.
+  if (gameState.phase === 'SIDESHOW_PENDING' && pending && pending.requesterId === playerId) {
+    const target = gameState.players.find(p => p.id === pending.targetId);
+    return (
+      <div className="control-rail px-3 py-3 text-center">
+        <div className="surface-pill mx-auto max-w-2xl rounded-[22px] px-4 py-3">
+          <div className="text-xs uppercase tracking-[0.22em] text-bone-dim">
+            Waiting for <span className="text-bone font-medium normal-case">{target?.name ?? 'opponent'}</span> to respond to sideshow…
           </div>
         </div>
       </div>
@@ -225,8 +241,9 @@ export default function TeenPattiActionBar() {
                   size="lg"
                   className="w-full"
                   onClick={() => sendAction({ type: 'REQUEST_SIDESHOW' })}
+                  disabled={currentPlayer.chips < chaalCost}
                 >
-                  Sideshow <span className="ml-1 font-mono text-[11px]">{stake.toLocaleString()}</span>
+                  Sideshow <span className="ml-1 font-mono text-[11px]">{chaalCost.toLocaleString()}</span>
                 </Button>
               )}
               {isShowEligible && (
