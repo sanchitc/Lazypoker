@@ -1,6 +1,7 @@
 import { Player, GameState } from '@common/types';
 import { CHIP_COLORS } from '@common/constants';
 import { Badge } from '@/components/ui/badge';
+import Card from './Card';
 
 interface OpponentBandProps {
   opponents: Player[];
@@ -44,6 +45,8 @@ function getStatusBadge(player: Player, gameState: GameState):
 export default function OpponentBand({ opponents, gameState, currentPlayerId: _currentPlayerId }: OpponentBandProps) {
   if (opponents.length === 0) return null;
 
+  const isShowdown = gameState.phase === 'SHOWDOWN' || gameState.phase === 'HAND_COMPLETE';
+
   return (
     <div className="flex justify-center gap-2 overflow-x-auto px-3 py-2 scrollbar-hide bg-ink/24 backdrop-blur-sm brass-hairline-b">
       {opponents.map(player => {
@@ -57,9 +60,9 @@ export default function OpponentBand({ opponents, gameState, currentPlayerId: _c
         , CHIP_COLORS[0]);
 
         return (
+          <div key={player.id} className="flex flex-shrink-0 flex-col items-center gap-1.5">
           <div
-            key={player.id}
-            className={`flex min-w-0 flex-shrink-0 items-center gap-2 rounded-full px-2.5 py-1.5
+            className={`flex min-w-0 items-center gap-2 rounded-full px-2.5 py-1.5
               transition-all duration-200
               ${isFolded ? 'opacity-35' : ''}
               ${isActing
@@ -113,6 +116,14 @@ export default function OpponentBand({ opponents, gameState, currentPlayerId: _c
                 {status.text}
               </Badge>
             )}
+          </div>
+
+          {isShowdown && player.holeCards && (
+            <div className="flex gap-0.5">
+              <Card card={player.holeCards[0]} size="sm" />
+              <Card card={player.holeCards[1]} size="sm" />
+            </div>
+          )}
           </div>
         );
       })}
