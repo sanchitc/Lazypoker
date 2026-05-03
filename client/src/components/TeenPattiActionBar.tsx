@@ -220,7 +220,7 @@ export default function TeenPattiActionBar() {
                 onClick={() => sendAction({ type: 'CHAAL' })}
                 disabled={!canChaal}
               >
-                Chaal <span className="ml-1 font-mono">{chaalCost.toLocaleString()}</span>
+                {seen ? 'Chaal' : 'Blind'} <span className="ml-1 font-mono">{chaalCost.toLocaleString()}</span>
               </Button>
               {canRaise && (
                 <Button
