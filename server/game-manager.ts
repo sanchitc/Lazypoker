@@ -141,6 +141,7 @@ export class GameManager {
       if (config.boot !== undefined) tp.boot = config.boot;
       if (config.chaalLimitMultiplier !== undefined) tp.chaalLimitMultiplier = config.chaalLimitMultiplier;
       if (config.potLimitMultiplier !== undefined) tp.potLimitMultiplier = config.potLimitMultiplier;
+      if (config.blindLimit !== undefined) tp.blindLimit = config.blindLimit;
       room.state.teenPatti = tp;
     }
 

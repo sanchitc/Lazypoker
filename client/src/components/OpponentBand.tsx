@@ -37,6 +37,7 @@ function getStatusBadge(player: Player, gameState: GameState):
   if (gameState.variant === 'teen-patti') {
     if (gameState.lastAction?.playerId === player.id) {
       const action = gameState.lastAction.action.toLowerCase();
+      if (action.includes('blind')) return { text: 'BLIND', variant: 'muted' };
       if (action.includes('chaal')) return { text: 'CHAAL', variant: 'ivy' };
       if (action.includes('raise')) return { text: 'RAISE', variant: 'brass' };
       if (action.includes('bet')) return { text: 'BET', variant: 'brass' };
@@ -133,13 +134,19 @@ export default function OpponentBand({ opponents, gameState, currentPlayerId: _c
             )}
           </div>
 
-          {player.holeCards && (
+          {player.holeCards ? (
             <div className="flex gap-0.5">
               {player.holeCards.map((card, i) => (
                 <Card key={i} card={card} size="sm" />
               ))}
             </div>
-          )}
+          ) : player.isFolded && gameState.variant === 'teen-patti' ? (
+            <div className="flex gap-0.5 opacity-40">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Card key={i} card={null} faceDown size="sm" />
+              ))}
+            </div>
+          ) : null}
           </div>
         );
       })}

@@ -189,6 +189,28 @@ export default function LobbyScreen() {
                 <Separator />
 
                 <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs uppercase tracking-[0.18em] text-bone-dim">Blind Limit</span>
+                  <Select
+                    value={String(gameState.teenPatti.blindLimit ?? 0)}
+                    onValueChange={(v) => handleConfigure('blindLimit', parseInt(v))}
+                  >
+                    <SelectTrigger className="w-32 h-9 text-sm font-mono">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0" className="font-mono">No limit</SelectItem>
+                      {[1, 2, 3, 4].map(v => (
+                        <SelectItem key={v} value={String(v)} className="font-mono">
+                          {v}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Separator />
+
+                <div className="flex items-center justify-between gap-3">
                   <span className="text-xs uppercase tracking-[0.18em] text-bone-dim">Pot Limit</span>
                   <Select
                     value={String(gameState.teenPatti.potLimitMultiplier)}

@@ -112,8 +112,8 @@ export default function PlayerSeat({ player, isActive, isCurrentPlayer, showCard
           ))}
         </div>
       )}
-      {showCards && !player.holeCards && !player.isFolded && !isCurrentPlayer && (
-        <div className="flex gap-0.5 mt-1">
+      {showCards && !player.holeCards && !isCurrentPlayer && (
+        <div className={`flex gap-0.5 mt-1 ${player.isFolded ? 'opacity-50' : ''}`}>
           {Array.from({ length: cardCount }).map((_, i) => (
             <Card key={i} card={null} faceDown size="sm" />
           ))}

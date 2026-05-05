@@ -27,6 +27,10 @@ export interface Player {
   // Teen Patti: true once the player has chosen to look at their cards.
   // Server filters out their own holeCards until this flips to true (FR-14).
   hasSeenCards?: boolean;
+  // Teen Patti: count of blind chaal/raise actions taken this hand. Used
+  // to enforce TeenPattiConfig.blindLimit; reset per hand. Boot does not
+  // count.
+  blindActionCount?: number;
   // Teen Patti: set when a sideshow this player requested was declined.
   // Blocks any further sideshow request from this player for the rest of
   // the hand. Reset on each new deal.
@@ -67,6 +71,9 @@ export interface TeenPattiConfig {
   // Pot ceiling triggering a forced show, expressed as a multiplier of the
   // boot amount. Defaults to 128 per PRD §2.3.
   potLimitMultiplier: number;
+  // Maximum number of blind chaal/raise actions a player may take before
+  // the server force-flips them into seen mode. 0 = no limit.
+  blindLimit: number;
 }
 
 export interface PendingSideshow {
@@ -182,6 +189,7 @@ export interface GameConfig {
   boot?: number;
   chaalLimitMultiplier?: number;
   potLimitMultiplier?: number;
+  blindLimit?: number;
 }
 
 export interface GameSummary {

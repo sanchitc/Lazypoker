@@ -33,6 +33,7 @@ export const DEFAULT_TEEN_PATTI_CONFIG = {
   boot: 10,
   chaalLimitMultiplier: 4,
   potLimitMultiplier: 128,
+  blindLimit: 0,
 };
 
 export const TEEN_PATTI_MAX_PLAYERS = 6;

@@ -573,8 +573,8 @@ function FullModeLayout() {
       {isWide && !isHandComplete && (
         <div className="px-3 pb-2">
           <div className="surface-pill mx-auto flex max-w-xl flex-wrap items-center justify-center gap-3 rounded-[28px] px-4 py-3">
-            {currentPlayer.holeCards && !currentPlayer.isFolded && (
-              <div className="flex justify-center gap-2">
+            {currentPlayer.holeCards && (
+              <div className={`flex justify-center gap-2 ${currentPlayer.isFolded ? 'opacity-40' : ''}`}>
                 <Card card={currentPlayer.holeCards[0]} size="lg" />
                 <Card card={currentPlayer.holeCards[1]} size="lg" />
               </div>
@@ -610,6 +610,7 @@ function FullModeLayout() {
             isAdmin={isAdmin}
             isMyTurn={isMyTurn}
             chipColor={chipColor.color}
+            cardCount={2}
           />
         </>
       )}
@@ -623,13 +624,20 @@ function FullModeLayout() {
                 {gameState.lastAction.action}
               </div>
             )}
-            {isAdmin ? (
-              <Button variant="raise" size="xl" className="w-full" onClick={handleNewHand}>
-                Deal Next Hand
-              </Button>
-            ) : (
-              <div className="text-bone-dim text-xs italic font-display">Waiting for next hand…</div>
-            )}
+            {(() => {
+              const nextDealerId = getNextTeenPattiDealerId(gameState);
+              const nextDealer = gameState.players.find(p => p.id === nextDealerId);
+              const isMyDeal = nextDealerId === playerId;
+              return isMyDeal ? (
+                <Button variant="raise" size="xl" className="w-full" onClick={handleNewHand}>
+                  Deal Next Hand
+                </Button>
+              ) : (
+                <div className="text-bone-dim text-xs italic font-display">
+                  Waiting for {nextDealer?.name ?? 'dealer'}…
+                </div>
+              );
+            })()}
             <div className="grid gap-2 sm:grid-cols-2">
               {currentPlayer.holeCards && (
                 <Button
@@ -667,12 +675,14 @@ function MobileSelfBar({
   isAdmin,
   isMyTurn,
   chipColor,
+  cardCount,
 }: {
   currentPlayer: Player;
   position: string | null;
   isAdmin: boolean;
   isMyTurn: boolean;
   chipColor: string;
+  cardCount: number;
 }) {
   return (
     <div className="flex items-center gap-3 px-3 py-2 bg-ink/24 backdrop-blur-sm brass-hairline-t">
@@ -713,10 +723,17 @@ function MobileSelfBar({
         </div>
       </div>
 
-      {currentPlayer.holeCards && !currentPlayer.isFolded && (
-        <div className="flex shrink-0 gap-1">
+      {currentPlayer.holeCards && (
+        <div className={`flex shrink-0 gap-1 ${currentPlayer.isFolded ? 'opacity-40' : ''}`}>
           {currentPlayer.holeCards.map((card, i) => (
             <Card key={i} card={card} size="md" />
+          ))}
+        </div>
+      )}
+      {currentPlayer.isFolded && !currentPlayer.holeCards && (
+        <div className="flex shrink-0 gap-1 opacity-40">
+          {Array.from({ length: cardCount }).map((_, i) => (
+            <Card key={i} card={null} faceDown size="md" />
           ))}
         </div>
       )}
@@ -727,6 +744,21 @@ function MobileSelfBar({
 // ============================================================
 // TEEN PATTI LAYOUT
 // ============================================================
+
+// Predict the next dealer at HAND_COMPLETE. Mirrors the server's
+// rotateDealerButton logic but omits isFolded since the server resets
+// folded flags before rotating, and including them here would skew the
+// prediction in a hand where the prospective next dealer just packed.
+function getNextTeenPattiDealerId(state: NonNullable<ReturnType<typeof useGame>['gameState']>): string | null {
+  const active = state.players
+    .filter(p => p.seatIndex >= 0 && !p.isSittingOut)
+    .sort((a, b) => a.seatIndex - b.seatIndex);
+  if (active.length === 0) return null;
+  if (state.dealerSeatIndex < 0) return active[0].id;
+  const next = active.find(p => p.seatIndex > state.dealerSeatIndex);
+  return (next ?? active[0]).id;
+}
+
 function TeenPattiLayout() {
   const { gameState, playerId, roomCode, currentPlayer, isAdmin, isMyTurn } = useGame();
   const { socket } = useSocket();
@@ -912,8 +944,8 @@ function TeenPattiLayout() {
       {isWide && !isHandComplete && (
         <div className="px-3 pb-2">
           <div className="surface-pill mx-auto flex max-w-xl flex-wrap items-center justify-center gap-3 rounded-[28px] px-4 py-3">
-            {currentPlayer.holeCards && !currentPlayer.isFolded ? (
-              <div className="flex justify-center gap-2">
+            {currentPlayer.holeCards ? (
+              <div className={`flex justify-center gap-2 ${currentPlayer.isFolded ? 'opacity-40' : ''}`}>
                 {currentPlayer.holeCards.map((card, i) => (
                   <Card key={i} card={card} size="lg" />
                 ))}
@@ -929,7 +961,13 @@ function TeenPattiLayout() {
                   <Button variant="outline" size="sm" onClick={handleSee}>See</Button>
                 )}
               </div>
-            ) : null}
+            ) : (
+              <div className="flex justify-center gap-2 opacity-40">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Card key={i} card={null} faceDown size="lg" />
+                ))}
+              </div>
+            )}
             <div className="rounded-full border border-bone/10 bg-panel-strong/55 px-3 py-2">
               <ChipStack amount={currentPlayer.chips} size="md" />
             </div>
@@ -956,8 +994,8 @@ function TeenPattiLayout() {
               <div className="surface-pill rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-brass/85">
                 Stake {stake.toLocaleString()}
               </div>
-              {currentPlayer.holeCards && !currentPlayer.isFolded ? (
-                <div className="flex gap-1">
+              {currentPlayer.holeCards ? (
+                <div className={`flex gap-1 ${currentPlayer.isFolded ? 'opacity-40' : ''}`}>
                   {currentPlayer.holeCards.map((card, i) => (
                     <Card key={i} card={card} size="md" />
                   ))}
@@ -973,7 +1011,13 @@ function TeenPattiLayout() {
                     <Button variant="outline" size="sm" onClick={handleSee}>See cards</Button>
                   )}
                 </div>
-              ) : null}
+              ) : (
+                <div className="flex gap-1 opacity-40">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <Card key={i} card={null} faceDown size="md" />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -983,6 +1027,7 @@ function TeenPattiLayout() {
             isAdmin={isAdmin}
             isMyTurn={isMyTurn}
             chipColor={chipColor.color}
+            cardCount={3}
           />
         </>
       )}
@@ -995,13 +1040,20 @@ function TeenPattiLayout() {
                 {gameState.lastAction.action}
               </div>
             )}
-            {isAdmin ? (
-              <Button variant="raise" size="xl" className="w-full" onClick={handleNewHand}>
-                Deal Next Hand
-              </Button>
-            ) : (
-              <div className="text-bone-dim text-xs italic font-display">Waiting for next hand…</div>
-            )}
+            {(() => {
+              const nextDealerId = getNextTeenPattiDealerId(gameState);
+              const nextDealer = gameState.players.find(p => p.id === nextDealerId);
+              const isMyDeal = nextDealerId === playerId;
+              return isMyDeal ? (
+                <Button variant="raise" size="xl" className="w-full" onClick={handleNewHand}>
+                  Deal Next Hand
+                </Button>
+              ) : (
+                <div className="text-bone-dim text-xs italic font-display">
+                  Waiting for {nextDealer?.name ?? 'dealer'}…
+                </div>
+              );
+            })()}
             <div className="grid gap-2 sm:grid-cols-2">
               {currentPlayer.holeCards && (
                 <Button

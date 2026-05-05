@@ -533,13 +533,23 @@ export function processAction(state: GameState, playerId: string, action: Player
 
   switch (action.type) {
     case 'START_HAND': {
-      if (!player.isAdmin) return state;
       const active = getActivePlayers(state);
       if (active.length < 2) return state;
 
       if (state.variant === 'teen-patti') {
+        // Teen Patti: admin OR the predicted next dealer can deal.
+        // Mirrors the client's getNextTeenPattiDealerId in GameScreen.tsx.
+        const seated = state.players
+          .filter(p => p.seatIndex >= 0 && !p.isSittingOut)
+          .sort((a, b) => a.seatIndex - b.seatIndex);
+        const nextDealer = state.dealerSeatIndex < 0
+          ? seated[0]
+          : (seated.find(p => p.seatIndex > state.dealerSeatIndex) ?? seated[0]);
+        if (!player.isAdmin && player.id !== nextDealer?.id) return state;
         return startTeenPattiHand(state);
       }
+
+      if (!player.isAdmin) return state;
 
       // Chip-only: block dealing if pot hasn't been awarded yet
       if (state.mode === 'chip-only') {
@@ -968,6 +978,7 @@ function startTeenPattiHand(state: GameState): GameState {
     p.wantsToShowCards = false;
     p.hasSeenCards = false;
     p.sideshowDeclined = false;
+    p.blindActionCount = 0;
   }
 
   s = rotateDealerButton(s);
@@ -1054,6 +1065,15 @@ function tpChaal(state: GameState, playerIndex: number): GameState {
   const cost = (player.hasSeenCards ? 2 : 1) * state.currentBet;
   if (cost > player.chips) return state;
 
+  // Track blind plays so we can force a player into seen mode once they
+  // hit the configured blindLimit. Boot is excluded — only chaal/raise
+  // count. The flip happens after the action that hits the limit, so
+  // their NEXT turn proceeds in seen mode (2× cost).
+  const isBlind = !player.hasSeenCards;
+  const blindLimit = state.teenPatti?.blindLimit ?? 0;
+  const newBlindCount = isBlind ? (player.blindActionCount ?? 0) + 1 : (player.blindActionCount ?? 0);
+  const forceSeen = isBlind && blindLimit > 0 && newBlindCount >= blindLimit;
+
   let s: GameState = {
     ...state,
     players: state.players.map((p, i) =>
@@ -1063,13 +1083,15 @@ function tpChaal(state: GameState, playerIndex: number): GameState {
             chips: p.chips - cost,
             totalBetThisHand: p.totalBetThisHand + cost,
             isAllIn: p.chips - cost === 0,
+            blindActionCount: newBlindCount,
+            hasSeenCards: forceSeen ? true : p.hasSeenCards,
           }
         : p
     ),
     pots: state.pots.map((pot, i) =>
       i === 0 ? { ...pot, amount: pot.amount + cost } : pot
     ),
-    lastAction: { playerId: player.id, action: 'chaal', amount: cost },
+    lastAction: { playerId: player.id, action: isBlind ? 'blind' : 'chaal', amount: cost },
   };
 
   if (teenPattiPotLimitReached(s)) {
@@ -1094,6 +1116,12 @@ function tpRaise(state: GameState, playerIndex: number, newStake: number): GameS
   if (cost > chaalLimit) return state;
   if (cost > player.chips) return state;
 
+  // Same blind-limit accounting as tpChaal — raises also count as blind plays.
+  const isBlind = !player.hasSeenCards;
+  const blindLimit = state.teenPatti.blindLimit ?? 0;
+  const newBlindCount = isBlind ? (player.blindActionCount ?? 0) + 1 : (player.blindActionCount ?? 0);
+  const forceSeen = isBlind && blindLimit > 0 && newBlindCount >= blindLimit;
+
   let s: GameState = {
     ...state,
     players: state.players.map((p, i) =>
@@ -1103,6 +1131,8 @@ function tpRaise(state: GameState, playerIndex: number, newStake: number): GameS
             chips: p.chips - cost,
             totalBetThisHand: p.totalBetThisHand + cost,
             isAllIn: p.chips - cost === 0,
+            blindActionCount: newBlindCount,
+            hasSeenCards: forceSeen ? true : p.hasSeenCards,
           }
         : p
     ),
