@@ -44,6 +44,10 @@ export interface Player {
 export type GameMode = 'full' | 'chip-only';
 export type GameVariant = 'poker' | 'teen-patti';
 
+// Teen Patti variation rules. Selected per-hand by the next dealer; each
+// reshapes hand ranking but uses the same 3-card deck.
+export type TeenPattiVariation = 'classic' | 'muflis' | 'ak47' | '999';
+
 export type Phase =
   | 'SETUP'
   | 'WAITING'
@@ -106,6 +110,11 @@ export interface GameState {
   lastHandSummary: HandSummary | null;
   // Teen Patti state
   teenPatti?: TeenPattiConfig;
+  // Variation chosen by the next dealer between hands; cleared at deal time.
+  nextHandVariation?: TeenPattiVariation;
+  // Snapshotted from nextHandVariation at startTeenPattiHand; immutable for
+  // the hand. Used by the evaluator dispatcher and the in-hand UI.
+  currentVariation?: TeenPattiVariation;
   pendingSideshow?: PendingSideshow | null;
   // Per-hand registry of sideshow-granted card peeks. When a sideshow is
   // accepted, the requester gains the right to see the responder's cards
@@ -133,6 +142,7 @@ export type PlayerAction =
   | { type: 'REQUEST_SIDESHOW' }
   | { type: 'RESPOND_SIDESHOW'; accept: boolean }
   | { type: 'CALL_SHOW' }
+  | { type: 'SET_NEXT_VARIATION'; variation: TeenPattiVariation }
   // Admin/Banker actions (variant-agnostic)
   | { type: 'START_HAND' }
   | { type: 'NEXT_ROUND' } // chip-only: advance betting round
@@ -223,6 +233,12 @@ export interface HandResult {
   rankValue: number; // higher is better
   kickers: number[];
   description: string;
+  // AK47: which of the original cards were used as wilds and what rank value
+  // they substituted as (e.g. K♥ used as a 5).
+  wildSubstitutions?: { cardIndex: number; usedAs: number }[];
+  // 999: the chosen single-digit values (sorted high → low) that produced the
+  // 3-digit number compared against 999.
+  chosenDigits?: number[];
 }
 
 // ===== Hand Summary =====

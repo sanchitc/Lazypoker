@@ -1,8 +1,8 @@
-import { GameState, Player, PlayerAction, Phase, Pot, Card, GameMode, GameVariant, HandSummary, HandWinner } from '../common/types.js';
+import { GameState, Player, PlayerAction, Phase, Pot, Card, GameMode, GameVariant, HandSummary, HandWinner, TeenPattiVariation } from '../common/types.js';
 import { DEFAULT_CONFIG, DEFAULT_TEEN_PATTI_CONFIG, TEEN_PATTI_MAX_PLAYERS } from '../common/constants.js';
 import { Dealer } from './deck.js';
 import { evaluateHand, compareHands } from './hand-evaluator.js';
-import { evaluateTeenPattiHand, compareTeenPattiHands } from './teen-patti-evaluator.js';
+import { evaluateTeenPattiHandFor, compareTeenPattiHands } from './teen-patti-evaluator.js';
 import { generatePlayerId } from './utils.js';
 
 export function createInitialState(roomCode: string, mode: GameMode, variant: GameVariant = 'poker'): GameState {
@@ -509,6 +509,7 @@ export function processAction(state: GameState, playerId: string, action: Player
       case 'REQUEST_SIDESHOW': return tpRequestSideshow(state, playerIndex);
       case 'RESPOND_SIDESHOW': return tpRespondSideshow(state, playerIndex, action.accept);
       case 'CALL_SHOW': return tpCallShow(state, playerIndex);
+      case 'SET_NEXT_VARIATION': return tpSetNextVariation(state, playerId, action.variation);
       // Reject poker-only actions in Teen Patti rooms.
       case 'FOLD':
       case 'CHECK':
@@ -527,6 +528,7 @@ export function processAction(state: GameState, playerId: string, action: Player
       case 'REQUEST_SIDESHOW':
       case 'RESPOND_SIDESHOW':
       case 'CALL_SHOW':
+      case 'SET_NEXT_VARIATION':
         return state;
     }
   }
@@ -957,6 +959,28 @@ function teenPattiPotLimitReached(state: GameState): boolean {
   return pot >= limit;
 }
 
+function getNextTeenPattiDealerId(state: GameState): string | null {
+  // Mirrors the client's getNextTeenPattiDealerId in GameScreen.tsx.
+  const seated = state.players
+    .filter(p => p.seatIndex >= 0 && !p.isSittingOut)
+    .sort((a, b) => a.seatIndex - b.seatIndex);
+  if (seated.length === 0) return null;
+  if (state.dealerSeatIndex < 0) return seated[0].id;
+  return (seated.find(p => p.seatIndex > state.dealerSeatIndex) ?? seated[0]).id;
+}
+
+const VALID_TEEN_PATTI_VARIATIONS: ReadonlySet<TeenPattiVariation> = new Set([
+  'classic', 'muflis', 'ak47', '999',
+]);
+
+function tpSetNextVariation(state: GameState, playerId: string, variation: TeenPattiVariation): GameState {
+  if (state.variant !== 'teen-patti') return state;
+  if (state.phase !== 'HAND_COMPLETE' && state.phase !== 'WAITING') return state;
+  if (!VALID_TEEN_PATTI_VARIATIONS.has(variation)) return state;
+  if (playerId !== getNextTeenPattiDealerId(state)) return state;
+  return { ...state, nextHandVariation: variation };
+}
+
 function startTeenPattiHand(state: GameState): GameState {
   let s: GameState = { ...state, players: state.players.map(p => ({ ...p })) };
 
@@ -969,6 +993,8 @@ function startTeenPattiHand(state: GameState): GameState {
   s.pendingSideshow = null;
   s.sideshowReveals = [];
   s.showCallerId = null;
+  s.currentVariation = s.nextHandVariation ?? 'classic';
+  s.nextHandVariation = undefined;
   for (const p of s.players) {
     p.currentBet = 0;
     p.totalBetThisHand = 0;
@@ -1215,8 +1241,9 @@ function tpRespondSideshow(state: GameState, playerIndex: number, accept: boolea
 
   // Compare hands; the lower-ranked player packs. On tie, requester loses
   // (challenger needs strictly better hand).
-  const reqHand = evaluateTeenPattiHand(requester.holeCards as [Card, Card, Card]);
-  const respHand = evaluateTeenPattiHand(responder.holeCards as [Card, Card, Card]);
+  const variation = state.currentVariation ?? 'classic';
+  const reqHand = evaluateTeenPattiHandFor(requester.holeCards as [Card, Card, Card], variation);
+  const respHand = evaluateTeenPattiHandFor(responder.holeCards as [Card, Card, Card], variation);
   const cmp = compareTeenPattiHands(reqHand, respHand);
   const loserIndex = cmp >= 0 ? playerIndex : requesterIndex;
   const loser = state.players[loserIndex];
@@ -1321,9 +1348,10 @@ function resolveTeenPattiShowdown(
   const eligible = getTeenPattiActivePlayers(state);
   if (eligible.length === 0) return state;
 
+  const variation = state.currentVariation ?? 'classic';
   const results = eligible.map(p => ({
     player: p,
-    hand: evaluateTeenPattiHand(p.holeCards as [Card, Card, Card]),
+    hand: evaluateTeenPattiHandFor(p.holeCards as [Card, Card, Card], variation),
   }));
   results.sort((a, b) => compareTeenPattiHands(b.hand, a.hand));
 

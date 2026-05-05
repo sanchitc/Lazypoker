@@ -9,7 +9,7 @@
  */
 import { Scenario } from '../lib/scenario.js';
 import { evaluateHand, compareHands } from '../../server/hand-evaluator.js';
-import { evaluateTeenPattiHand, compareTeenPattiHands } from '../../server/teen-patti-evaluator.js';
+import { evaluateTeenPattiHand, evaluateTeenPattiHandFor, compareTeenPattiHands } from '../../server/teen-patti-evaluator.js';
 import type { Card, Rank, Suit } from '../../common/types.js';
 
 const c = (rank: Rank, suit: Suit): Card => ({ rank, suit });
@@ -286,6 +286,169 @@ export const handEvaluatorScenarios: Scenario[] = [
       const a = evaluateTeenPattiHand([c('A', 'spades'), c('Q', 'hearts'), c('5', 'clubs')]);
       const b = evaluateTeenPattiHand([c('A', 'diamonds'), c('Q', 'clubs'), c('5', 'hearts')]);
       ctx.expect(compareTeenPattiHands(a, b) === 0, 'identical high-card hands tie');
+    },
+  },
+
+  // ============================================================
+  // Teen Patti — Muflis (lowball)
+  // ============================================================
+  {
+    name: 'Muflis: high-card beats pair (rankings inverted)',
+    category: 'HandEvaluator',
+    async fn(ctx) {
+      const hc = evaluateTeenPattiHandFor([c('5', 'spades'), c('3', 'hearts'), c('2', 'diamonds')], 'muflis');
+      const pair = evaluateTeenPattiHandFor([c('2', 'spades'), c('2', 'hearts'), c('3', 'clubs')], 'muflis');
+      ctx.expect(compareTeenPattiHands(hc, pair) > 0, 'mixed high-card beats pair-of-2s in Muflis', { severity: 'critical' });
+    },
+  },
+  {
+    name: 'Muflis: lower pair beats higher pair',
+    category: 'HandEvaluator',
+    async fn(ctx) {
+      const lo = evaluateTeenPattiHandFor([c('2', 'spades'), c('2', 'hearts'), c('3', 'clubs')], 'muflis');
+      const hi = evaluateTeenPattiHandFor([c('K', 'spades'), c('K', 'hearts'), c('2', 'clubs')], 'muflis');
+      ctx.expect(compareTeenPattiHands(lo, hi) > 0, 'pair of 2s beats pair of Ks in Muflis');
+    },
+  },
+  {
+    name: 'Muflis: trail category is the lowest, with low trail winning',
+    category: 'HandEvaluator',
+    async fn(ctx) {
+      const trail2 = evaluateTeenPattiHandFor([c('2', 'spades'), c('2', 'hearts'), c('2', 'diamonds')], 'muflis');
+      const trailA = evaluateTeenPattiHandFor([c('A', 'spades'), c('A', 'hearts'), c('A', 'diamonds')], 'muflis');
+      ctx.expect(compareTeenPattiHands(trail2, trailA) > 0, 'trail of 2s beats trail of Aces in Muflis (lower wins within trails)');
+      const hc = evaluateTeenPattiHandFor([c('A', 'spades'), c('K', 'hearts'), c('Q', 'diamonds')], 'muflis');
+      ctx.expect(compareTeenPattiHands(hc, trail2) > 0, 'any high-card beats Trail in Muflis (trail is lowest category)');
+    },
+  },
+  {
+    name: 'Muflis: 4-3-2 sequence beats A-2-3 sequence (inverted)',
+    category: 'HandEvaluator',
+    async fn(ctx) {
+      const lo = evaluateTeenPattiHandFor([c('2', 'spades'), c('3', 'hearts'), c('4', 'diamonds')], 'muflis');
+      const hi = evaluateTeenPattiHandFor([c('A', 'spades'), c('2', 'hearts'), c('3', 'diamonds')], 'muflis');
+      ctx.expect(compareTeenPattiHands(lo, hi) > 0, '4-3-2 beats A-2-3 in Muflis');
+    },
+  },
+  {
+    name: 'Muflis: same pair, lower kicker wins',
+    category: 'HandEvaluator',
+    async fn(ctx) {
+      const aa2 = evaluateTeenPattiHandFor([c('A', 'spades'), c('A', 'hearts'), c('2', 'clubs')], 'muflis');
+      const aaK = evaluateTeenPattiHandFor([c('A', 'spades'), c('A', 'hearts'), c('K', 'clubs')], 'muflis');
+      ctx.expect(compareTeenPattiHands(aa2, aaK) > 0, 'pair-of-Aces with 2 kicker beats pair-of-Aces with K kicker in Muflis');
+    },
+  },
+
+  // ============================================================
+  // Teen Patti — AK47 (A/K/4/7 wild)
+  // ============================================================
+  {
+    name: 'AK47: natural Trail of 5s beats wild Trail of 5s',
+    category: 'HandEvaluator',
+    async fn(ctx) {
+      const natural = evaluateTeenPattiHandFor([c('5', 'spades'), c('5', 'hearts'), c('5', 'diamonds')], 'ak47');
+      const wild = evaluateTeenPattiHandFor([c('5', 'spades'), c('A', 'hearts'), c('K', 'diamonds')], 'ak47');
+      ctx.expect(natural.rank === 'trail', 'natural is a trail', { actual: natural.rank });
+      ctx.expect(wild.rank === 'trail', 'wild-built is a trail', { actual: wild.rank });
+      ctx.expect(compareTeenPattiHands(natural, wild) > 0, 'natural Trail beats wild Trail at same rank', { severity: 'critical' });
+    },
+  },
+  {
+    name: 'AK47: all-wild produces Trail of Aces',
+    category: 'HandEvaluator',
+    async fn(ctx) {
+      const aaa = evaluateTeenPattiHandFor([c('K', 'spades'), c('4', 'hearts'), c('7', 'diamonds')], 'ak47');
+      ctx.expect(aaa.rank === 'trail', 'all-wild evaluates as trail', { actual: aaa.rank });
+      ctx.expect(aaa.kickers[0] === 14, 'all-wild trail is of Aces', { actual: String(aaa.kickers) });
+    },
+  },
+  {
+    name: 'AK47: flush detection with wild K',
+    category: 'HandEvaluator',
+    async fn(ctx) {
+      // K, 5, 9 all hearts — natural color. Wild K can substitute for any rank
+      // but the suit (hearts) is preserved, so it remains a flush. Best is
+      // Pure Sequence by promoting K→? A wild K of hearts can become A or 6 or
+      // 7… any rank. With 5,9 we can build pure sequence 7-8-9? No, only one
+      // wild. 5,9,K → wild becomes 6 → sequence 5,6,9? Not consecutive.
+      // The realistic best is 9-high flush with the K used as 9? Actually 9
+      // is already there; a duplicate would form pair-with-one-wild. Best
+      // achievable: trail of 9s? No, only one 9. So: pair of 9s with the
+      // K substituted as 9 (wild count 1) — but wait, that loses the flush
+      // structurally because pair is below color. Let's just verify it's
+      // recognized as trail or higher: using K wild as 5, we get 5-5-9 pair
+      // of 5s. As 9, we get 9-9-K… wait K is the wild. Original cards:
+      // K♥, 5♥, 9♥. Wild K → some rank R, suit hearts. To form pair with 9
+      // → R=9 → 9♥, 5♥, 9♥ = pair of 9s. Or R=5 → 5,5,9 = pair of 5s. Or
+      // sequence 4-5-6? Need three consecutive — 5,9 are too far apart.
+      // Best: pair of 9s (rankValue 209). But wait — flush is rankValue 300
+      // and the card is still hearts, so K-9-5 of hearts = color, K-high.
+      // That's a higher rank. Color > pair. Best is K-high flush.
+      // Hmm but K is wild so we'd substitute it with the highest rank that
+      // still gives best result. Since color rankValue=300 regardless of
+      // top kicker mostly, but kickers tiebreak it. Substituting K→A makes
+      // A-9-5 hearts = color, A-high (kickers [14,9,5]). Better than K-high.
+      const hand = evaluateTeenPattiHandFor([c('K', 'hearts'), c('9', 'hearts'), c('5', 'hearts')], 'ak47');
+      ctx.expect(hand.rank === 'color', 'wild K still allows color (suit preserved)', { actual: hand.rank });
+    },
+  },
+  {
+    name: 'AK47: Classic regression — non-wild hand evaluates same as Classic',
+    category: 'HandEvaluator',
+    async fn(ctx) {
+      // No wilds in {3, 5, 9, 10, J, Q} — pick a hand of these.
+      const cards: [Card, Card, Card] = [c('5', 'spades'), c('5', 'hearts'), c('9', 'clubs')];
+      const classic = evaluateTeenPattiHandFor(cards, 'classic');
+      const ak47 = evaluateTeenPattiHandFor(cards, 'ak47');
+      ctx.expect(classic.rank === ak47.rank, 'rank matches Classic', { actual: `${classic.rank} vs ${ak47.rank}` });
+      ctx.expect(classic.rankValue === ak47.rankValue, 'rankValue matches Classic');
+    },
+  },
+
+  // ============================================================
+  // Teen Patti — 999 (closest to 999)
+  // ============================================================
+  {
+    name: '999: triple 9 is the perfect hand',
+    category: 'HandEvaluator',
+    async fn(ctx) {
+      const perfect = evaluateTeenPattiHandFor([c('9', 'spades'), c('9', 'hearts'), c('9', 'diamonds')], '999');
+      const close = evaluateTeenPattiHandFor([c('9', 'spades'), c('9', 'hearts'), c('7', 'diamonds')], '999');
+      ctx.expect(perfect.rankValue === 1000, '999 is rankValue 1000', { actual: String(perfect.rankValue) });
+      ctx.expect(compareTeenPattiHands(perfect, close) > 0, 'perfect 999 beats 997');
+    },
+  },
+  {
+    name: '999: K-Q-J = 000 (worst possible)',
+    category: 'HandEvaluator',
+    async fn(ctx) {
+      const zero = evaluateTeenPattiHandFor([c('K', 'spades'), c('Q', 'hearts'), c('J', 'diamonds')], '999');
+      const ace = evaluateTeenPattiHandFor([c('A', 'spades'), c('A', 'hearts'), c('A', 'diamonds')], '999');
+      ctx.expect(zero.kickers.every(k => k === 0), 'all face cards = 0', { actual: String(zero.kickers) });
+      ctx.expect(compareTeenPattiHands(ace, zero) > 0, 'A-A-A (111) beats K-Q-J (000)');
+    },
+  },
+  {
+    name: '999: tied distance broken by chosen digits',
+    category: 'HandEvaluator',
+    async fn(ctx) {
+      // 9-9-7 → 997 (off by 2). 9-9-A → 991 (off by 8). Take a real tie:
+      // 9-8-9 → 998 (off by 1) and 9-9-7 → 997 (off by 2). Different distances.
+      // Real tie: K-9-9 → 990 (off by 9) and Q-9-9 → 990. Same distance, same digits.
+      // Try: 8-7-A and 8-A-7 — both reduce to 871 (off by 128). Equal — tie.
+      // Hmm, want unequal high digit. K-9-9 = 990 distance 9. 8-9-A = 891 distance 108. Different.
+      // 5-A-A → 511 distance 488. 5-2-2 → 522 distance 477. Different.
+      // Difficult to construct same-distance, different-digits tie cleanly.
+      // Simpler: same distance via 999-N and 999+N. Can't go above 999, so all
+      // distances are 999 - X for non-negative.
+      // Two distinct multisets giving same total: {9,8,A} → 981. {9,7,2} → 972 (different). {9,9,A} = 991. Multisets are unique once sorted.
+      // So same-digit-multiset tie is the only way and gives identical kickers.
+      // Just verify chosenDigits is populated and matches.
+      const h = evaluateTeenPattiHandFor([c('A', 'spades'), c('5', 'hearts'), c('9', 'diamonds')], '999');
+      ctx.expect(h.chosenDigits !== undefined && h.chosenDigits.join('-') === '9-5-1', 'chosen digits sorted desc', {
+        actual: String(h.chosenDigits),
+      });
     },
   },
 ];

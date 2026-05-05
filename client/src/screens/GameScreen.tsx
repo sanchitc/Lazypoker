@@ -16,11 +16,15 @@ import AwardPotButton from '../components/AwardPotButton';
 import HandRankings from '../components/HandRankings';
 import WinnerBanner from '../components/WinnerBanner';
 import ChatPanel from '../components/ChatPanel';
+import VariationPicker from '../components/VariationPicker';
+import VariationInfoSheet from '../components/VariationInfoSheet';
 import { useSocket } from '../context/SocketContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { CHIP_COLORS } from '@common/constants';
+import { TEEN_PATTI_VARIATIONS } from '@common/teen-patti-variations';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { HelpCircle } from 'lucide-react';
 import type { GameState, Player } from '@common/types';
 
 function getSeatPositions(totalSeats: number, currentPlayerSeatIndex: number): { x: number; y: number }[] {
@@ -876,6 +880,12 @@ function TeenPattiLayout() {
   const myChaalCost = stake * (seen ? 2 : 1);
   const totalPot = gameState.pots.reduce((sum, p) => sum + p.amount, 0);
   const tpConfig = gameState.teenPatti;
+  // Header chip + info sheet show the in-hand variation; between hands fall
+  // back to whatever the next dealer has queued (or Classic if nothing set).
+  const activeVariation = isHandComplete
+    ? (gameState.nextHandVariation ?? 'classic')
+    : (gameState.currentVariation ?? 'classic');
+  const [infoOpen, setInfoOpen] = useState(false);
 
   const chipColor = CHIP_COLORS.reduce((best, chip) =>
     currentPlayer.chips >= chip.value ? chip : best
@@ -894,7 +904,17 @@ function TeenPattiLayout() {
               {timeLeft}s
             </Badge>
           )}
-          <Badge variant="outline">Teen Patti</Badge>
+          <Badge variant="outline">
+            {TEEN_PATTI_VARIATIONS[activeVariation].shortLabel}
+          </Badge>
+          <button
+            type="button"
+            onClick={() => setInfoOpen(true)}
+            aria-label="Variation rules"
+            className="flex h-6 w-6 items-center justify-center rounded-full border border-brass/30 bg-panel-strong/60 text-brass/80 hover:text-brass hover:border-brass/50 active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brass"
+          >
+            <HelpCircle className="h-3.5 w-3.5" />
+          </button>
         </div>
         <div className="text-[10px] sm:text-xs text-brass font-display tracking-[0.18em] uppercase whitespace-nowrap">
           Stake {stake.toLocaleString()}
@@ -1045,9 +1065,12 @@ function TeenPattiLayout() {
               const nextDealer = gameState.players.find(p => p.id === nextDealerId);
               const isMyDeal = nextDealerId === playerId;
               return isMyDeal ? (
-                <Button variant="raise" size="xl" className="w-full" onClick={handleNewHand}>
-                  Deal Next Hand
-                </Button>
+                <>
+                  <VariationPicker />
+                  <Button variant="raise" size="xl" className="w-full" onClick={handleNewHand}>
+                    Deal Next Hand
+                  </Button>
+                </>
               ) : (
                 <div className="text-bone-dim text-xs italic font-display">
                   Waiting for {nextDealer?.name ?? 'dealer'}…
@@ -1078,6 +1101,11 @@ function TeenPattiLayout() {
       <HandRankings />
       <ChatPanel />
       <WinnerBanner gameState={gameState} />
+      <VariationInfoSheet
+        variation={activeVariation}
+        open={infoOpen}
+        onOpenChange={setInfoOpen}
+      />
     </div>
   );
 }
