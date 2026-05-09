@@ -5,14 +5,16 @@ import { SUIT_COLORS, SUIT_SYMBOLS } from '@common/constants';
 interface CardProps {
   card: CardType | null;
   faceDown?: boolean;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 }
 
 // 5:7 poker proportions
 const SIZES = {
-  sm: { w: 32, h: 45,  rank: 'text-[11px]', suit: 'text-xs',  corner: 'text-[8px]' },
-  md: { w: 48, h: 67,  rank: 'text-base',   suit: 'text-lg',  corner: 'text-[10px]' },
-  lg: { w: 64, h: 90,  rank: 'text-2xl',    suit: 'text-2xl', corner: 'text-xs' },
+  xs: { w: 26, h: 36,  rank: 'text-[11px]', suit: 'text-[11px]', corner: 'text-[7px]' },
+  sm: { w: 32, h: 45,  rank: 'text-[11px]', suit: 'text-xs',   corner: 'text-[8px]' },
+  md: { w: 48, h: 67,  rank: 'text-base',   suit: 'text-lg',   corner: 'text-[10px]' },
+  lg: { w: 64, h: 90,  rank: 'text-2xl',    suit: 'text-2xl',  corner: 'text-xs' },
+  xl: { w: 72, h: 100, rank: 'text-[30px]', suit: 'text-[28px]', corner: 'text-xs' },
 };
 
 export default function Card({ card, faceDown = false, size = 'md' }: CardProps) {

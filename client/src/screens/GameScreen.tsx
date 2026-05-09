@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useRef, useState } from 'react';
+import { Fragment, useMemo, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useGame } from '../context/GameContext';
 import PlayerSeat from '../components/PlayerSeat';
@@ -763,12 +763,148 @@ function getNextTeenPattiDealerId(state: NonNullable<ReturnType<typeof useGame>[
   return (next ?? active[0]).id;
 }
 
+// Seat opponents around the top arc of the felt so they read as players AT
+// the table. Mirrors the design's seatPositions(n, mode): outer seats curve
+// downward (small arc), inner seats sit higher; the bet pill drops below the
+// full seat stack (avatar + name pill + status badge ≈ 88px) onto the felt.
+function getFeltSeatPositions(n: number, mode: 'portrait' | 'landscape') {
+  return Array.from({ length: n }, (_, i) => {
+    const t = n === 1 ? 0.5 : i / (n - 1);
+    const xPct = 14 + t * 72; // tighter inset so outer seats clear the felt rim
+    const arc = Math.abs(t - 0.5) * 2;
+    const seatTop = mode === 'landscape' ? 6 + arc * 6 : 10 + arc * 8;
+    const betTop = seatTop + (mode === 'landscape' ? 96 : 102);
+    return {
+      seat: { left: `${xPct}%`, top: `${seatTop}px` } as const,
+      bet: { left: `${xPct}%`, top: `${betTop}px` } as const,
+    };
+  });
+}
+
+function formatFeltChips(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k`;
+  return n.toLocaleString();
+}
+
+function FeltSeat({
+  player,
+  isActing,
+  isHandComplete,
+  isWinner,
+  style,
+}: {
+  player: Player;
+  isActing: boolean;
+  isHandComplete: boolean;
+  isWinner: boolean;
+  style: { left: string; top: string };
+}) {
+  const isFolded = player.isFolded;
+  const seen = !!player.hasSeenCards;
+  const status = isFolded ? 'PACK' : seen ? 'SEEN' : 'BLIND';
+  return (
+    <div
+      className="absolute z-30 flex w-[70px] -translate-x-1/2 flex-col items-center gap-[3px]"
+      style={{ ...style, opacity: isFolded ? 0.45 : 1 }}
+    >
+      <div className="relative">
+        <div
+          className={`flex h-10 w-10 items-center justify-center rounded-full border text-sm font-bold text-bone shadow-md shadow-ink/40
+            ${isActing
+              ? 'border-brass/55 bg-gradient-to-b from-felt-rim to-panel-strong ring-pulse'
+              : 'border-bone/10 bg-gradient-to-b from-panel-soft to-panel-strong'}`}
+        >
+          {player.name[0].toUpperCase()}
+        </div>
+        {player.isDealer && (
+          <span
+            title="Dealer"
+            className="absolute -bottom-[3px] -right-[3px] flex h-4 w-4 items-center justify-center rounded-full border-2 border-ink bg-brass text-[9px] font-extrabold text-ink"
+          >
+            D
+          </span>
+        )}
+      </div>
+      <div
+        className={`flex min-w-[56px] max-w-[76px] flex-col items-center rounded-[10px] px-2 py-[2px]
+          ${isActing
+            ? 'surface-panel shadow-[0_0_14px_-6px_hsl(var(--brass)/0.7)]'
+            : 'surface-panel-soft'}`}
+      >
+        <span className="max-w-[60px] truncate text-[10.5px] leading-[1.2] text-bone">
+          {player.name}
+          {player.isAdmin && <span className="ml-0.5 text-brass">*</span>}
+        </span>
+        <span className="font-mono text-[9.5px] font-semibold leading-[1.25] text-brass">
+          ◉ {formatFeltChips(player.chips)}
+        </span>
+      </div>
+      <span
+        className={`rounded-full border px-1.5 py-px font-mono text-[8.5px] font-bold uppercase leading-[1.4] tracking-[0.14em]
+          ${isFolded
+            ? 'border-bone/16 bg-bone/[0.06] text-bone/50'
+            : seen
+              ? 'border-brass/32 bg-brass/[0.14] text-brass'
+              : 'border-bone/18 bg-bone/[0.08] text-bone'}`}
+      >
+        {status}
+      </span>
+      {/* Showdown — reveal hole cards face-up beneath the seat. Cards are
+          gently fanned (negative margin + rotation) so 3 cards fit within the
+          70px seat column on the narrowest screens. Folded players show
+          nothing; winners get a brass glow to telegraph the result. */}
+      {isHandComplete && !isFolded && player.holeCards && (
+        <div className="mt-1 flex pl-2">
+          {player.holeCards.map((c, i) => (
+            <div
+              key={i}
+              style={{
+                marginLeft: i === 0 ? 0 : -10,
+                transform: `rotate(${(i - 1) * 5}deg)`,
+                transformOrigin: '50% 100%',
+                filter: isWinner ? 'drop-shadow(0 0 6px hsl(var(--brass) / 0.6))' : 'none',
+              }}
+            >
+              <Card card={c} size="xs" />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FeltSeatBet({
+  amount,
+  style,
+}: {
+  amount: number;
+  style: { left: string; top: string };
+}) {
+  return (
+    <div className="absolute z-20 -translate-x-1/2" style={style}>
+      <span
+        className="inline-flex items-center gap-1 rounded-full border border-brass/35 bg-ink/[0.72] px-2 py-[2px] font-mono text-[10px] font-bold text-brass
+          shadow-[0_2px_8px_hsl(var(--ink)/0.55),inset_0_0_0_1px_hsl(var(--brass)/0.08)]"
+      >
+        <span
+          className="h-1.5 w-1.5 rounded-full bg-brass shadow-[0_0_6px_hsl(var(--brass)/0.5)]"
+        />
+        +{formatFeltChips(amount)}
+      </span>
+    </div>
+  );
+}
+
 function TeenPattiLayout() {
   const { gameState, playerId, roomCode, currentPlayer, isMyTurn } = useGame();
   const { socket } = useSocket();
   const layoutMode = useLayoutMode();
   const isDesktop = layoutMode === 'desktop';
   const isLandscape = layoutMode === 'phone-landscape';
+  // Tall portrait phones (Pro Max 932, Pixel 7 915, iPhone 14 844) can afford a
+  // bigger pot pill and xl hole cards so the felt doesn't feel hollow.
+  const isTallPortrait = useMediaQuery('(min-height: 800px)') && !isLandscape && !isDesktop;
 
   const turnTimer = gameState?.turnTimer ?? 0;
   const [timeLeft, setTimeLeft] = useState<number>(turnTimer);
@@ -877,6 +1013,9 @@ function TeenPattiLayout() {
   };
 
   const isHandComplete = gameState.phase === 'HAND_COMPLETE';
+  // Winners (used to brass-glow the winning seat at showdown). Pulled from
+  // the broadcast hand summary; null until the server announces the result.
+  const winnerIds = gameState.lastHandSummary?.winners.map(w => w.playerId) ?? null;
   const stake = gameState.currentBet;
   const seen = !!currentPlayer.hasSeenCards;
   const myChaalCost = stake * (seen ? 2 : 1);
@@ -931,8 +1070,12 @@ function TeenPattiLayout() {
     </div>
   );
 
-  // The felt pane: pot, stake/pot-limit line, my hole cards, action log.
-  // Used in both portrait (full-width, flex-1) and landscape (center column).
+  // The felt pane: opponents seated on the top arc + pot, stake/pot-limit line,
+  // my hole cards, action log. Used in both portrait (full-width, flex-1) and
+  // landscape (center column of a 2-col grid).
+  const feltMode: 'portrait' | 'landscape' = isLandscape ? 'landscape' : 'portrait';
+  const seatPositions = getFeltSeatPositions(opponents.length, feltMode);
+  const cardSize = isLandscape ? 'md' : isTallPortrait ? 'xl' : 'lg';
   const TablePane = (
     <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-3 py-2">
       <div className="absolute inset-x-2 inset-y-2 rounded-[28px] surface-panel-soft" />
@@ -941,7 +1084,42 @@ function TeenPattiLayout() {
                       border border-bone/6
                       shadow-[inset_0_0_48px_rgba(0,0,0,0.35)]" />
 
-      <div className="relative z-10 flex flex-col items-center gap-2 w-full">
+      {/* Seated opponents — anchored to the top arc of the felt */}
+      {opponents.map((p, i) => {
+        const isActing = !isHandComplete && gameState.players[gameState.activePlayerIndex]?.id === p.id;
+        const isWinner = isHandComplete && !!winnerIds && winnerIds.includes(p.id);
+        const pos = seatPositions[i];
+        if (!pos) return null;
+        return (
+          <Fragment key={p.id}>
+            <FeltSeat
+              player={p}
+              isActing={isActing}
+              isHandComplete={isHandComplete}
+              isWinner={isWinner}
+              style={pos.seat}
+            />
+            {/* Hide bet chips at showdown — pot is settled so they're noise. */}
+            {!isHandComplete && !p.isFolded && p.currentBet > 0 && (
+              <FeltSeatBet amount={p.currentBet} style={pos.bet} />
+            )}
+          </Fragment>
+        );
+      })}
+
+      {/* Felt content — distributed across height, with top room for seats.
+          Showdown bumps the top inset so the fanned hole cards beneath each
+          seat don't kiss the pot pill. */}
+      <div
+        className="relative z-10 flex flex-1 w-full flex-col items-center justify-evenly"
+        style={{
+          // Top padding clears the seat stack (avatar 40 + pill ~30 + badge ~18 + bet ~24 ≈ 112-130px).
+          paddingTop: isLandscape
+            ? (isHandComplete ? 158 : 128)
+            : (isHandComplete ? 174 : 142),
+          paddingBottom: isLandscape ? 4 : 12,
+        }}
+      >
         {isHandComplete && gameState.lastAction ? (
           <div className="flex flex-col items-center gap-1.5">
             <div className="font-display brass-shimmer-text text-xl sm:text-2xl text-center px-2 leading-tight">
@@ -950,7 +1128,7 @@ function TeenPattiLayout() {
             <PotDisplay pots={gameState.pots} />
           </div>
         ) : (
-          <>
+          <div className="flex flex-col items-center gap-2.5">
             <PotDisplay pots={gameState.pots} />
             <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-bone-dim">
               <span className="font-mono tabular-nums text-brass/85">stake {stake.toLocaleString()}</span>
@@ -969,20 +1147,20 @@ function TeenPattiLayout() {
                 </>
               )}
             </div>
-          </>
+          </div>
         )}
 
         {currentPlayer.holeCards ? (
-          <div className={`flex gap-1.5 ${currentPlayer.isFolded ? 'opacity-40' : ''}`}>
+          <div className={`flex ${isTallPortrait ? 'gap-3' : 'gap-1.5'} ${currentPlayer.isFolded ? 'opacity-40' : ''}`}>
             {currentPlayer.holeCards.map((card, i) => (
-              <Card key={i} card={card} size={isLandscape ? 'md' : 'lg'} />
+              <Card key={i} card={card} size={cardSize} />
             ))}
           </div>
         ) : !currentPlayer.isFolded ? (
           <div className="flex flex-col items-center gap-1.5">
-            <div className="flex gap-1.5">
+            <div className={`flex ${isTallPortrait ? 'gap-3' : 'gap-1.5'}`}>
               {Array.from({ length: 3 }).map((_, i) => (
-                <Card key={i} card={null} faceDown size={isLandscape ? 'md' : 'lg'} />
+                <Card key={i} card={null} faceDown size={cardSize} />
               ))}
             </div>
             {isMyTurn && !isHandComplete && (
@@ -990,9 +1168,9 @@ function TeenPattiLayout() {
             )}
           </div>
         ) : (
-          <div className="flex gap-1.5 opacity-40">
+          <div className={`flex ${isTallPortrait ? 'gap-3' : 'gap-1.5'} opacity-40`}>
             {Array.from({ length: 3 }).map((_, i) => (
-              <Card key={i} card={null} faceDown size={isLandscape ? 'md' : 'lg'} />
+              <Card key={i} card={null} faceDown size={cardSize} />
             ))}
           </div>
         )}
@@ -1165,18 +1343,11 @@ function TeenPattiLayout() {
           {isHandComplete ? HandCompleteDock(false) : <TeenPattiActionBar />}
         </>
       ) : isLandscape ? (
-        // ============= PHONE LANDSCAPE: 3-column grid =============
+        // ============= PHONE LANDSCAPE: 2-column grid (felt + dock) =============
+        // Opponents now seat on the felt itself (top arc), so no separate column.
         <>
           {StatusStrip}
-          <div className="grid min-h-0 flex-1 grid-cols-[120px_1fr_150px] gap-1">
-            <aside className="min-h-0 overflow-hidden border-r border-brass/12">
-              <OpponentBand
-                opponents={opponents}
-                gameState={gameState}
-                currentPlayerId={playerId}
-                layout="col"
-              />
-            </aside>
+          <div className="grid min-h-0 flex-1 grid-cols-[1fr_168px] gap-1">
             <div className="flex min-h-0 flex-col">{TablePane}</div>
             <aside className="flex min-h-0 flex-col border-l border-brass/12">
               {isHandComplete ? HandCompleteDock(true) : <TeenPattiActionBar layout="vertical" />}
@@ -1185,9 +1356,10 @@ function TeenPattiLayout() {
         </>
       ) : (
         // ============= PHONE PORTRAIT: vertical stack =============
+        // Opponents seat on the felt's top arc (rendered inside TablePane),
+        // so the strip-above-felt OpponentBand is gone for Teen Patti.
         <>
           {StatusStrip}
-          <OpponentBand opponents={opponents} gameState={gameState} currentPlayerId={playerId} layout="row" />
           {TablePane}
           {isHandComplete ? HandCompleteDock(false) : <TeenPattiActionBar />}
         </>
