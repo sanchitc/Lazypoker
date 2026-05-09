@@ -28,7 +28,7 @@ export default function App() {
   return (
     <SocketProvider>
       <GameProvider>
-        <div className="h-screen w-screen overflow-hidden select-none bg-felt-deep text-bone">
+        <div className="h-[100dvh] w-screen overflow-hidden select-none bg-felt-deep text-bone">
           <AppContent />
           <Toaster position="top-center" />
         </div>

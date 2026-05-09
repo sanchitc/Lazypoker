@@ -4,27 +4,36 @@ import { useSocket } from '../context/SocketContext';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 
-export default function TeenPattiActionBar() {
+interface TeenPattiActionBarProps {
+  layout?: 'horizontal' | 'vertical';
+}
+
+export default function TeenPattiActionBar({ layout = 'horizontal' }: TeenPattiActionBarProps) {
   const { gameState, playerId, roomCode, isMyTurn, currentPlayer } = useGame();
   const { socket } = useSocket();
-  const [showRaiseSlider, setShowRaiseSlider] = useState(false);
+  const [showRaiseSheet, setShowRaiseSheet] = useState(false);
   const [raiseStake, setRaiseStake] = useState(0);
 
   const tp = gameState?.teenPatti;
   const stake = gameState?.currentBet ?? 0;
   const seen = !!currentPlayer?.hasSeenCards;
 
-  const { activeCount, isSideshowEligible, prevSeenAvailable, isShowEligible, showCost } = useMemo(() => {
+  const { isSideshowEligible, isShowEligible, showCost } = useMemo(() => {
     if (!gameState || !currentPlayer) {
-      return { activeCount: 0, isSideshowEligible: false, prevSeenAvailable: false, isShowEligible: false, showCost: 0 };
+      return { isSideshowEligible: false, isShowEligible: false, showCost: 0 };
     }
     const active = gameState.players
       .filter(p => p.seatIndex >= 0 && !p.isFolded && !p.isSittingOut)
       .sort((a, b) => a.seatIndex - b.seatIndex);
     const activeCount = active.length;
 
-    // Sideshow: requires 3+ active, requester seen, previous active player also seen.
     let prevSeenAvailable = false;
     if (seen && activeCount >= 3) {
       const others = active.filter(p => p.seatIndex !== currentPlayer.seatIndex);
@@ -40,7 +49,6 @@ export default function TeenPattiActionBar() {
     const isSideshowEligible =
       seen && activeCount >= 3 && prevSeenAvailable && !currentPlayer.sideshowDeclined;
 
-    // Show: only with exactly 2 active players. Seen-vs-blind by seen caller forbidden.
     let isShowEligible = false;
     let showCost = 0;
     if (activeCount === 2) {
@@ -54,27 +62,37 @@ export default function TeenPattiActionBar() {
         }
       }
     }
-    return { activeCount, isSideshowEligible, prevSeenAvailable, isShowEligible, showCost };
+    return { isSideshowEligible, isShowEligible, showCost };
   }, [gameState, currentPlayer, seen, stake]);
 
   if (!gameState || !playerId || !roomCode || !currentPlayer || !tp) return null;
 
   const sendAction = (action: any) => {
     socket?.emit('action', { roomCode, playerId, action });
-    setShowRaiseSlider(false);
+    setShowRaiseSheet(false);
   };
 
-  // Sideshow pending: target gets accept/decline overlay regardless of turn.
+  const isVertical = layout === 'vertical';
+  // Vertical (landscape) lives inside the right column flex container; horizontal (portrait)
+  // is the bottom-anchored control rail. The dock chrome differs slightly to fit each.
+  const dockClass = isVertical
+    ? 'flex h-full flex-col gap-2 px-2 py-2'
+    : 'control-rail px-3 pb-3 pt-2 animate-slide-up';
+  const innerClass = isVertical
+    ? 'flex flex-col gap-2'
+    : 'mx-auto max-w-2xl rounded-[26px] surface-panel p-3 sm:p-4';
+
+  // Sideshow target overlay — full width.
   const pending = gameState.pendingSideshow;
   if (gameState.phase === 'SIDESHOW_PENDING' && pending && pending.targetId === playerId) {
     const requester = gameState.players.find(p => p.id === pending.requesterId);
     return (
-      <div className="control-rail px-3 pb-3 pt-2 animate-slide-up">
-        <div className="mx-auto max-w-2xl rounded-[26px] surface-panel p-3">
-          <div className="text-center text-xs uppercase tracking-[0.18em] text-brass mb-2">
-            Sideshow request from <span className="text-bone normal-case">{requester?.name ?? 'opponent'}</span>
+      <div className={dockClass}>
+        <div className={innerClass}>
+          <div className={`text-center text-[12.5px] uppercase tracking-[0.18em] text-brass mb-2 ${isVertical ? 'leading-tight' : ''}`}>
+            Sideshow from <span className="text-bone normal-case">{requester?.name ?? 'opponent'}</span>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className={isVertical ? 'flex flex-col gap-2' : 'grid grid-cols-2 gap-2'}>
             <Button variant="check" size="lg" onClick={() => sendAction({ type: 'RESPOND_SIDESHOW', accept: true })}>
               Accept
             </Button>
@@ -87,15 +105,15 @@ export default function TeenPattiActionBar() {
     );
   }
 
-  // Requester sees a waiting pill instead of the regular action bar while
-  // the target decides — otherwise the still-active action bar is misleading.
   if (gameState.phase === 'SIDESHOW_PENDING' && pending && pending.requesterId === playerId) {
     const target = gameState.players.find(p => p.id === pending.targetId);
     return (
-      <div className="control-rail px-3 py-3 text-center">
-        <div className="surface-pill mx-auto max-w-2xl rounded-[22px] px-4 py-3">
-          <div className="text-xs uppercase tracking-[0.22em] text-bone-dim">
-            Waiting for <span className="text-bone font-medium normal-case">{target?.name ?? 'opponent'}</span> to respond to sideshow…
+      <div className={isVertical ? 'flex h-full items-center px-2' : 'control-rail px-3 py-3 text-center'}>
+        <div className={isVertical
+          ? 'surface-pill w-full rounded-2xl px-3 py-3 text-center'
+          : 'surface-pill mx-auto max-w-2xl rounded-[22px] px-4 py-3'}>
+          <div className="text-[12.5px] uppercase tracking-[0.2em] text-bone-dim leading-tight">
+            Waiting for <span className="text-bone font-medium normal-case">{target?.name ?? 'opponent'}</span>…
           </div>
         </div>
       </div>
@@ -105,14 +123,16 @@ export default function TeenPattiActionBar() {
   if (!isMyTurn) {
     const activePlayer = gameState.activePlayerIndex >= 0 ? gameState.players[gameState.activePlayerIndex] : null;
     return (
-      <div className="control-rail px-3 py-3 text-center">
-        <div className="surface-pill mx-auto max-w-2xl rounded-[22px] px-4 py-3">
+      <div className={isVertical ? 'flex h-full items-center px-2' : 'control-rail px-3 py-3 text-center'}>
+        <div className={isVertical
+          ? 'surface-pill w-full rounded-2xl px-3 py-3 text-center'
+          : 'surface-pill mx-auto max-w-2xl rounded-[22px] px-4 py-3'}>
           {activePlayer ? (
-            <div className="text-xs uppercase tracking-[0.22em] text-bone-dim">
+            <div className="text-[12.5px] uppercase tracking-[0.2em] text-bone-dim leading-tight">
               Waiting for <span className="text-bone font-medium normal-case">{activePlayer.name}</span>
             </div>
           ) : (
-            <div className="text-xs uppercase tracking-[0.22em] text-bone-dim">Waiting…</div>
+            <div className="text-[12.5px] uppercase tracking-[0.2em] text-bone-dim">Waiting…</div>
           )}
         </div>
       </div>
@@ -122,7 +142,6 @@ export default function TeenPattiActionBar() {
   const chaalCost = (seen ? 2 : 1) * stake;
   const canChaal = currentPlayer.chips >= chaalCost;
 
-  // Raise stake bounds: new stake > current; cost = (seen?2:1)*newStake; cost ≤ chaalLimit*currentStake.
   const chaalLimit = tp.chaalLimitMultiplier * stake;
   const costMul = seen ? 2 : 1;
   const minStake = stake + 1;
@@ -138,11 +157,117 @@ export default function TeenPattiActionBar() {
   ].filter(p => p.amount >= minStake && p.amount <= maxStake);
   const matchedPreset = presets.find(p => p.amount === raiseStake)?.value ?? '';
 
+  const openRaise = () => {
+    setRaiseStake(Math.min(maxStake, 2 * stake));
+    setShowRaiseSheet(true);
+  };
+
+  // ----- PRIMARY actions (always visible) -----
+  const primaryButtons = (
+    <>
+      <Button variant="fold" size="lg" className="w-full" onClick={() => sendAction({ type: 'PACK' })}>
+        Pack
+      </Button>
+      <Button
+        variant="call"
+        size="lg"
+        className="w-full"
+        onClick={() => sendAction({ type: 'CHAAL' })}
+        disabled={!canChaal}
+      >
+        {seen ? 'Chaal' : 'Blind'} <span className="ml-1 font-mono">{chaalCost.toLocaleString()}</span>
+      </Button>
+      {canRaise ? (
+        <Button variant="raise" size="lg" className="w-full" onClick={openRaise}>
+          Raise
+        </Button>
+      ) : (
+        <Button variant="raise" size="lg" className="w-full" disabled>
+          Raise
+        </Button>
+      )}
+    </>
+  );
+
+  // ----- CONTEXT actions (only what's available) -----
+  const contextButtons: React.ReactNode[] = [];
+  if (!seen) {
+    contextButtons.push(
+      <Button
+        key="see"
+        variant="outline"
+        size="lg"
+        className="w-full"
+        onClick={() => sendAction({ type: 'SEE_CARDS' })}
+      >
+        See cards
+      </Button>
+    );
+  }
+  if (isSideshowEligible) {
+    contextButtons.push(
+      <Button
+        key="sideshow"
+        variant="outline"
+        size="lg"
+        className="w-full"
+        onClick={() => sendAction({ type: 'REQUEST_SIDESHOW' })}
+        disabled={currentPlayer.chips < chaalCost}
+      >
+        Sideshow <span className="ml-1 font-mono text-[11px]">{chaalCost.toLocaleString()}</span>
+      </Button>
+    );
+  }
+  if (isShowEligible) {
+    contextButtons.push(
+      <Button
+        key="show"
+        variant="allin"
+        size="lg"
+        className="w-full"
+        onClick={() => sendAction({ type: 'CALL_SHOW' })}
+        disabled={currentPlayer.chips < showCost}
+      >
+        Show <span className="ml-1 font-mono">{showCost.toLocaleString()}</span>
+      </Button>
+    );
+  }
+
+  // ----- LAYOUT -----
   return (
-    <div className="control-rail px-3 pb-3 pt-2 animate-slide-up">
-      <div className="mx-auto max-w-5xl rounded-[26px] surface-panel p-3 sm:p-4">
-        {showRaiseSlider ? (
-          <div className="space-y-3 rounded-[22px] border border-bone/10 bg-panel-strong/55 p-3">
+    <>
+      <div className={dockClass}>
+        <div className={innerClass}>
+          {!isVertical && (
+            <div className="text-center text-[11.5px] uppercase tracking-[0.22em] text-brass/80 pb-2">
+              Your turn — {seen ? 'Chaal' : 'Blind'} {chaalCost.toLocaleString()}
+            </div>
+          )}
+          {isVertical ? (
+            <div className="flex flex-col gap-2">{primaryButtons}</div>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">{primaryButtons}</div>
+          )}
+          {contextButtons.length > 0 && (
+            <div className={isVertical ? 'flex flex-col gap-2 pt-1' : 'grid grid-cols-3 gap-2 pt-2'}>
+              {contextButtons}
+              {/* Pad context row to keep buttons full-width in horizontal layout */}
+              {!isVertical && contextButtons.length < 3 &&
+                Array.from({ length: 3 - contextButtons.length }).map((_, i) => (
+                  <div key={`pad-${i}`} aria-hidden />
+                ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Raise bottom sheet */}
+      <Sheet open={showRaiseSheet} onOpenChange={setShowRaiseSheet}>
+        <SheetContent side="bottom" className="rounded-t-[28px] pt-6 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+          <SheetHeader>
+            <SheetTitle>Raise</SheetTitle>
+          </SheetHeader>
+          <div className="space-y-3">
             <div className="flex items-end justify-between gap-3">
               <div>
                 <div className="text-[10px] uppercase tracking-[0.22em] text-bone-dim">New stake</div>
@@ -150,7 +275,7 @@ export default function TeenPattiActionBar() {
                   Pay {(costMul * raiseStake).toLocaleString()} ({seen ? '2×' : '1×'} stake)
                 </div>
               </div>
-              <span className="font-display tabular-display text-[40px] leading-none text-brass">
+              <span className="font-display tabular-display text-[44px] leading-none text-brass">
                 {raiseStake.toLocaleString()}
               </span>
             </div>
@@ -186,8 +311,8 @@ export default function TeenPattiActionBar() {
               </ToggleGroup>
             )}
 
-            <div className="grid gap-2 sm:grid-cols-2">
-              <Button variant="outline" className="w-full" onClick={() => setShowRaiseSlider(false)}>
+            <div className="grid gap-2 grid-cols-2">
+              <Button variant="outline" className="w-full" onClick={() => setShowRaiseSheet(false)}>
                 Cancel
               </Button>
               <Button
@@ -199,68 +324,9 @@ export default function TeenPattiActionBar() {
               </Button>
             </div>
           </div>
-        ) : (
-          <>
-            <div className="text-center text-[10px] uppercase tracking-[0.22em] text-brass/80 pb-2">
-              Stake {stake.toLocaleString()} · your chaal {chaalCost.toLocaleString()} ({seen ? '2×' : '1×'})
-            </div>
-            <div className="grid gap-2 grid-cols-2 sm:[grid-template-columns:repeat(auto-fit,minmax(140px,1fr))]">
-              <Button variant="fold" size="lg" className="w-full" onClick={() => sendAction({ type: 'PACK' })}>
-                Pack
-              </Button>
-              {!seen && (
-                <Button variant="outline" size="lg" className="w-full" onClick={() => sendAction({ type: 'SEE_CARDS' })}>
-                  See Cards
-                </Button>
-              )}
-              <Button
-                variant="call"
-                size="lg"
-                className="w-full"
-                onClick={() => sendAction({ type: 'CHAAL' })}
-                disabled={!canChaal}
-              >
-                {seen ? 'Chaal' : 'Blind'} <span className="ml-1 font-mono">{chaalCost.toLocaleString()}</span>
-              </Button>
-              {canRaise && (
-                <Button
-                  variant="raise"
-                  size="lg"
-                  className="w-full"
-                  onClick={() => {
-                    setRaiseStake(Math.min(maxStake, 2 * stake));
-                    setShowRaiseSlider(true);
-                  }}
-                >
-                  Raise
-                </Button>
-              )}
-              {isSideshowEligible && (
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="w-full"
-                  onClick={() => sendAction({ type: 'REQUEST_SIDESHOW' })}
-                  disabled={currentPlayer.chips < chaalCost}
-                >
-                  Sideshow <span className="ml-1 font-mono text-[11px]">{chaalCost.toLocaleString()}</span>
-                </Button>
-              )}
-              {isShowEligible && (
-                <Button
-                  variant="allin"
-                  size="lg"
-                  className="w-full"
-                  onClick={() => sendAction({ type: 'CALL_SHOW' })}
-                  disabled={currentPlayer.chips < showCost}
-                >
-                  Show <span className="ml-1 font-mono">{showCost.toLocaleString()}</span>
-                </Button>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+        </SheetContent>
+      </Sheet>
+
+    </>
   );
 }

@@ -30,7 +30,10 @@ function clampPos(x: number, y: number): { x: number; y: number } {
 }
 
 function defaultBubblePos() {
-  return clampPos(window.innerWidth - BUBBLE_SIZE - 12, 68);
+  // Bottom-left, with extra clearance for the iOS home-indicator safe-area
+  // and a typical mobile control rail. User can drag elsewhere if they like.
+  const HOME_INDICATOR_BUFFER = 48;
+  return clampPos(12, window.innerHeight - BUBBLE_SIZE - HOME_INDICATOR_BUFFER);
 }
 
 export default function ChatPanel() {

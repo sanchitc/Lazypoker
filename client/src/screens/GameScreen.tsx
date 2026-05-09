@@ -19,7 +19,7 @@ import ChatPanel from '../components/ChatPanel';
 import VariationPicker from '../components/VariationPicker';
 import VariationInfoSheet from '../components/VariationInfoSheet';
 import { useSocket } from '../context/SocketContext';
-import { useMediaQuery } from '../hooks/useMediaQuery';
+import { useMediaQuery, useLayoutMode } from '../hooks/useMediaQuery';
 import { CHIP_COLORS } from '@common/constants';
 import { TEEN_PATTI_VARIATIONS } from '@common/teen-patti-variations';
 import { Button } from '@/components/ui/button';
@@ -62,7 +62,7 @@ function PhaseStepper({ phase }: { phase: string }) {
           return (
             <span
               key={p.key}
-              className="surface-pill rounded-full px-2 py-0.5 text-[9px] sm:px-2.5 sm:py-1 sm:text-[10px] uppercase tracking-[0.18em] text-brass font-display"
+              className="surface-pill rounded-full px-2.5 py-1 text-[10.5px] sm:px-3 sm:py-1 sm:text-[11.5px] uppercase tracking-[0.18em] text-brass font-display"
             >
               {p.label}
             </span>
@@ -209,7 +209,7 @@ function ChipOnlyLayout() {
     <div className="game-shell h-full flex flex-col overflow-hidden felt-noise vignette mx-auto w-full max-w-3xl">
       {/* HEADER with phase stepper */}
       <div className="flex items-center justify-between gap-2 px-3 py-2 bg-ink/28 backdrop-blur-sm brass-hairline-b">
-        <span className="text-[10px] text-bone-dim font-mono tabular-nums whitespace-nowrap">
+        <span className="text-[11.5px] text-bone-dim font-mono tabular-nums whitespace-nowrap">
           #{gameState.handNumber} · {gameState.smallBlind}/{gameState.bigBlind}
         </span>
         <div className="flex items-center gap-2 shrink-0">
@@ -279,7 +279,7 @@ function ChipOnlyLayout() {
                 {currentPlayer.chips.toLocaleString()}
               </span>
               {currentPlayer.currentBet > 0 && (
-                <span className="text-[9px] text-brass/70 font-mono tabular-nums">
+                <span className="text-[11px] text-brass/70 font-mono tabular-nums">
                   (bet: {currentPlayer.currentBet.toLocaleString()})
                 </span>
               )}
@@ -528,7 +528,7 @@ function FullModeLayout() {
     <div className="game-shell h-full flex flex-col felt-noise vignette mx-auto w-full max-w-6xl">
       {/* Top bar */}
       <div className="flex items-center justify-between gap-2 px-3 py-2 bg-ink/28 backdrop-blur-sm brass-hairline-b">
-        <div className="text-[10px] sm:text-xs text-bone-dim font-mono tabular-nums whitespace-nowrap">
+        <div className="text-[11.5px] sm:text-xs text-bone-dim font-mono tabular-nums whitespace-nowrap">
           #{gameState.handNumber} · {gameState.smallBlind}/{gameState.bigBlind}
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -719,7 +719,7 @@ function MobileSelfBar({
               {currentPlayer.chips.toLocaleString()}
             </span>
             {currentPlayer.currentBet > 0 && (
-              <span className="text-[9px] text-brass/70 font-mono tabular-nums">
+              <span className="text-[11px] text-brass/70 font-mono tabular-nums">
                 (bet {currentPlayer.currentBet.toLocaleString()})
               </span>
             )}
@@ -764,9 +764,11 @@ function getNextTeenPattiDealerId(state: NonNullable<ReturnType<typeof useGame>[
 }
 
 function TeenPattiLayout() {
-  const { gameState, playerId, roomCode, currentPlayer, isAdmin, isMyTurn } = useGame();
+  const { gameState, playerId, roomCode, currentPlayer, isMyTurn } = useGame();
   const { socket } = useSocket();
-  const isWide = useMediaQuery('(min-width: 768px)');
+  const layoutMode = useLayoutMode();
+  const isDesktop = layoutMode === 'desktop';
+  const isLandscape = layoutMode === 'phone-landscape';
 
   const turnTimer = gameState?.turnTimer ?? 0;
   const [timeLeft, setTimeLeft] = useState<number>(turnTimer);
@@ -880,6 +882,8 @@ function TeenPattiLayout() {
   const myChaalCost = stake * (seen ? 2 : 1);
   const totalPot = gameState.pots.reduce((sum, p) => sum + p.amount, 0);
   const tpConfig = gameState.teenPatti;
+  const potLimitTotal = tpConfig ? tpConfig.boot * tpConfig.potLimitMultiplier : 0;
+  const potLimitProgress = potLimitTotal > 0 ? Math.min(1, totalPot / potLimitTotal) : 0;
   // Header chip + info sheet show the in-hand variation; between hands fall
   // back to whatever the next dealer has queued (or Classic if nothing set).
   const activeVariation = isHandComplete
@@ -887,214 +891,306 @@ function TeenPattiLayout() {
     : (gameState.currentVariation ?? 'classic');
   const [infoOpen, setInfoOpen] = useState(false);
 
-  const chipColor = CHIP_COLORS.reduce((best, chip) =>
-    currentPlayer.chips >= chip.value ? chip : best
-  , CHIP_COLORS[0]);
+  // Rolling action log line (mobile replacement for per-seat action chips).
+  const actionLogText = (() => {
+    if (!gameState.lastAction || !recentActorId) return null;
+    const actor = gameState.players.find(p => p.id === gameState.lastAction!.playerId);
+    if (!actor) return null;
+    const amt = gameState.lastAction.amount;
+    const actionText = gameState.lastAction.action;
+    return `${actor.name} ${actionText}${amt ? ' ' + amt.toLocaleString() : ''}`;
+  })();
+
+  // ============= Reusable mobile region renderers =============
+
+  // Right padding reserves room for the floating AdminPanel crown (top-right, fixed)
+  // and the HandRankings tab (right-edge) so neither overlaps the timer badge.
+  const StatusStrip = (
+    <div
+      className={`flex items-center justify-between gap-2 bg-ink/28 backdrop-blur-sm brass-hairline-b pr-12
+                  ${isLandscape ? 'pl-3 py-1' : 'pl-3 py-2'}`}
+    >
+      <button
+        type="button"
+        onClick={() => setInfoOpen(true)}
+        aria-label="Variation rules"
+        className="flex items-center gap-1.5 rounded-full border border-brass/24 bg-panel-strong/55 px-2.5 py-1 text-[11.5px] tracking-tight text-bone hover:border-brass/45 active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brass"
+      >
+        <span className="font-mono tabular-nums text-bone-dim">#{gameState.handNumber}</span>
+        <span className="text-brass/80">·</span>
+        <span className="font-display uppercase tracking-[0.14em] text-brass/90">
+          {TEEN_PATTI_VARIATIONS[activeVariation].shortLabel}
+        </span>
+        <HelpCircle className="h-3.5 w-3.5 text-brass/70" />
+      </button>
+      {turnTimer > 0 && isMyTurn && !isHandComplete && (
+        <Badge variant={timeLeft <= 5 ? 'ember' : 'brass'} className={timeLeft <= 5 ? 'animate-pulse' : ''}>
+          {timeLeft}s
+        </Badge>
+      )}
+    </div>
+  );
+
+  // The felt pane: pot, stake/pot-limit line, my hole cards, action log.
+  // Used in both portrait (full-width, flex-1) and landscape (center column).
+  const TablePane = (
+    <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-3 py-2">
+      <div className="absolute inset-x-2 inset-y-2 rounded-[28px] surface-panel-soft" />
+      <div className="absolute inset-x-3.5 inset-y-3.5 rounded-[24px]
+                      bg-[radial-gradient(circle_at_50%_40%,hsl(151_56%_25%)_0%,hsl(var(--felt))_42%,hsl(var(--felt-rim))_84%,hsl(154_43%_13%)_100%)]
+                      border border-bone/6
+                      shadow-[inset_0_0_48px_rgba(0,0,0,0.35)]" />
+
+      <div className="relative z-10 flex flex-col items-center gap-2 w-full">
+        {isHandComplete && gameState.lastAction ? (
+          <div className="flex flex-col items-center gap-1.5">
+            <div className="font-display brass-shimmer-text text-xl sm:text-2xl text-center px-2 leading-tight">
+              {gameState.lastAction.action}
+            </div>
+            <PotDisplay pots={gameState.pots} />
+          </div>
+        ) : (
+          <>
+            <PotDisplay pots={gameState.pots} />
+            <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-bone-dim">
+              <span className="font-mono tabular-nums text-brass/85">stake {stake.toLocaleString()}</span>
+              {potLimitTotal > 0 && (
+                <>
+                  <span className="text-bone/30">·</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-bone-dim/70">limit</span>
+                    <span className="relative h-1 w-12 overflow-hidden rounded-full bg-bone/10">
+                      <span
+                        className="absolute inset-y-0 left-0 bg-brass/70"
+                        style={{ width: `${potLimitProgress * 100}%` }}
+                      />
+                    </span>
+                  </span>
+                </>
+              )}
+            </div>
+          </>
+        )}
+
+        {currentPlayer.holeCards ? (
+          <div className={`flex gap-1.5 ${currentPlayer.isFolded ? 'opacity-40' : ''}`}>
+            {currentPlayer.holeCards.map((card, i) => (
+              <Card key={i} card={card} size={isLandscape ? 'md' : 'lg'} />
+            ))}
+          </div>
+        ) : !currentPlayer.isFolded ? (
+          <div className="flex flex-col items-center gap-1.5">
+            <div className="flex gap-1.5">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Card key={i} card={null} faceDown size={isLandscape ? 'md' : 'lg'} />
+              ))}
+            </div>
+            {isMyTurn && !isHandComplete && (
+              <Button variant="outline" size="sm" onClick={handleSee}>See cards</Button>
+            )}
+          </div>
+        ) : (
+          <div className="flex gap-1.5 opacity-40">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Card key={i} card={null} faceDown size={isLandscape ? 'md' : 'lg'} />
+            ))}
+          </div>
+        )}
+
+        {!isHandComplete && actionLogText && (
+          <div className="surface-pill rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.16em] text-bone-dim">
+            {actionLogText}
+          </div>
+        )}
+
+        {isHandComplete && (
+          <div className="flex items-center gap-1.5 text-[11.5px] uppercase tracking-[0.18em] text-bone-dim">
+            <span className="font-mono tabular-nums text-brass/85">pot {totalPot.toLocaleString()}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // Hand-complete dock content (replaces the action bar at HAND_COMPLETE).
+  const HandCompleteDock = (vertical: boolean) => {
+    const nextDealerId = getNextTeenPattiDealerId(gameState);
+    const nextDealer = gameState.players.find(p => p.id === nextDealerId);
+    const isMyDeal = nextDealerId === playerId;
+    return (
+      <div className={vertical ? 'flex h-full flex-col gap-2 px-2 py-2' : 'control-rail px-3 pb-3 pt-2'}>
+        <div className={vertical
+          ? 'flex flex-col gap-2'
+          : 'space-y-2 rounded-[24px] surface-panel p-3 text-center mx-auto max-w-2xl'}>
+          {isMyDeal ? (
+            <>
+              <VariationPicker />
+              <Button variant="raise" size={vertical ? 'lg' : 'xl'} className="w-full" onClick={handleNewHand}>
+                Deal Next Hand
+              </Button>
+            </>
+          ) : (
+            <div className="text-bone-dim text-[12.5px] italic font-display text-center px-2">
+              Waiting for {nextDealer?.name ?? 'dealer'}…
+            </div>
+          )}
+          <div className={vertical ? 'flex flex-col gap-2' : 'grid gap-2 grid-cols-2'}>
+            {currentPlayer.holeCards && (
+              <Button
+                variant={currentPlayer.wantsToShowCards ? 'host' : 'outline'}
+                className="w-full"
+                onClick={handleShowCards}
+                size={vertical ? 'sm' : 'md'}
+              >
+                {currentPlayer.wantsToShowCards ? 'Hide Cards' : 'Show Cards'}
+              </Button>
+            )}
+            <Button variant="fold" className="w-full" onClick={handleLeaveGame} size={vertical ? 'sm' : 'md'}>
+              Leave Game
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ============= Layout switch =============
 
   return (
     <div className="game-shell h-full flex flex-col felt-noise vignette mx-auto w-full max-w-6xl">
-      {/* Top bar */}
-      <div className="flex items-center justify-between gap-2 px-3 py-2 bg-ink/28 backdrop-blur-sm brass-hairline-b">
-        <div className="text-[10px] sm:text-xs text-bone-dim font-mono tabular-nums whitespace-nowrap">
-          #{gameState.handNumber} · boot {tpConfig?.boot ?? '—'}
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {turnTimer > 0 && isMyTurn && !isHandComplete && (
-            <Badge variant={timeLeft <= 5 ? 'ember' : 'brass'} className={timeLeft <= 5 ? 'animate-pulse' : ''}>
-              {timeLeft}s
-            </Badge>
-          )}
-          <Badge variant="outline">
-            {TEEN_PATTI_VARIATIONS[activeVariation].shortLabel}
-          </Badge>
-          <button
-            type="button"
-            onClick={() => setInfoOpen(true)}
-            aria-label="Variation rules"
-            className="flex h-6 w-6 items-center justify-center rounded-full border border-brass/30 bg-panel-strong/60 text-brass/80 hover:text-brass hover:border-brass/50 active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brass"
-          >
-            <HelpCircle className="h-3.5 w-3.5" />
-          </button>
-        </div>
-        <div className="text-[10px] sm:text-xs text-brass font-display tracking-[0.18em] uppercase whitespace-nowrap">
-          Stake {stake.toLocaleString()}
-        </div>
-      </div>
-
-      {isWide ? (
-        // Tablet/desktop: elliptical table
-        <div className="relative flex-1 overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_56%,hsl(var(--felt-rim)/0.12),transparent_40%)]" />
-          <div className="absolute left-[4%] right-[4%] top-[6%] bottom-[7%] rounded-[50%] table-shell" />
-          <div className="absolute left-[5%] right-[5%] top-[7.5%] bottom-[8.5%] rounded-[50%] table-felt" />
-          <div className="absolute left-[12%] right-[12%] top-[18%] bottom-[18%] rounded-[50%] table-spotlight opacity-80" />
-
-          {seatedPlayers.map((player, i) => (
-            <PlayerSeat
-              key={player.id}
-              player={player}
-              isActive={gameState.players[gameState.activePlayerIndex]?.id === player.id}
-              isCurrentPlayer={player.id === playerId}
-              showCards={true}
-              position={positions[i] || { x: 50, y: 50 }}
-              cardCount={3}
-              seenStatus={
-                isHandComplete || !player.holeCards
-                  ? null
-                  : player.hasSeenCards ? 'seen' : 'blind'
-              }
-              actionBadge={
-                recentActorId === player.id && gameState.lastAction
-                  ? gameState.lastAction
-                  : null
-              }
-            />
-          ))}
-
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
-                          flex flex-col items-center gap-3">
-            <PotDisplay pots={gameState.pots} />
-            <div className="surface-pill rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-brass/85">
+      {isDesktop ? (
+        // ============= DESKTOP =============
+        <>
+          <div className="flex items-center justify-between gap-2 px-3 py-2 bg-ink/28 backdrop-blur-sm brass-hairline-b">
+            <div className="text-[11.5px] sm:text-xs text-bone-dim font-mono tabular-nums whitespace-nowrap">
+              #{gameState.handNumber} · boot {tpConfig?.boot ?? '—'}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {turnTimer > 0 && isMyTurn && !isHandComplete && (
+                <Badge variant={timeLeft <= 5 ? 'ember' : 'brass'} className={timeLeft <= 5 ? 'animate-pulse' : ''}>
+                  {timeLeft}s
+                </Badge>
+              )}
+              <Badge variant="outline">
+                {TEEN_PATTI_VARIATIONS[activeVariation].shortLabel}
+              </Badge>
+              <button
+                type="button"
+                onClick={() => setInfoOpen(true)}
+                aria-label="Variation rules"
+                className="flex h-6 w-6 items-center justify-center rounded-full border border-brass/30 bg-panel-strong/60 text-brass/80 hover:text-brass hover:border-brass/50 active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brass"
+              >
+                <HelpCircle className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="text-[11.5px] sm:text-xs text-brass font-display tracking-[0.18em] uppercase whitespace-nowrap">
               Stake {stake.toLocaleString()}
             </div>
           </div>
-        </div>
-      ) : null}
 
-      {isWide && !isHandComplete && (
-        <div className="px-3 pb-2">
-          <div className="surface-pill mx-auto flex max-w-xl flex-wrap items-center justify-center gap-3 rounded-[28px] px-4 py-3">
-            {currentPlayer.holeCards ? (
-              <div className={`flex justify-center gap-2 ${currentPlayer.isFolded ? 'opacity-40' : ''}`}>
-                {currentPlayer.holeCards.map((card, i) => (
-                  <Card key={i} card={card} size="lg" />
-                ))}
-              </div>
-            ) : !currentPlayer.isFolded ? (
-              <div className="flex items-center gap-2">
-                <div className="flex gap-1">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <Card key={i} card={null} faceDown size="lg" />
-                  ))}
-                </div>
-                {isMyTurn && (
-                  <Button variant="outline" size="sm" onClick={handleSee}>See</Button>
-                )}
-              </div>
-            ) : (
-              <div className="flex justify-center gap-2 opacity-40">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <Card key={i} card={null} faceDown size="lg" />
-                ))}
-              </div>
-            )}
-            <div className="rounded-full border border-bone/10 bg-panel-strong/55 px-3 py-2">
-              <ChipStack amount={currentPlayer.chips} size="md" />
-            </div>
-            <Badge variant={seen ? 'brass' : 'muted'} className="text-[10px]">
-              {seen ? 'SEEN' : 'BLIND'} · chaal {myChaalCost.toLocaleString()}
-            </Badge>
-          </div>
-        </div>
-      )}
+          <div className="relative flex-1 overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_56%,hsl(var(--felt-rim)/0.12),transparent_40%)]" />
+            <div className="absolute left-[4%] right-[4%] top-[6%] bottom-[7%] rounded-[50%] table-shell" />
+            <div className="absolute left-[5%] right-[5%] top-[7.5%] bottom-[8.5%] rounded-[50%] table-felt" />
+            <div className="absolute left-[12%] right-[12%] top-[18%] bottom-[18%] rounded-[50%] table-spotlight opacity-80" />
 
-      {!isWide && (
-        <>
-          <OpponentBand opponents={opponents} gameState={gameState} currentPlayerId={playerId} />
+            {seatedPlayers.map((player, i) => (
+              <PlayerSeat
+                key={player.id}
+                player={player}
+                isActive={gameState.players[gameState.activePlayerIndex]?.id === player.id}
+                isCurrentPlayer={player.id === playerId}
+                showCards={true}
+                position={positions[i] || { x: 50, y: 50 }}
+                cardCount={3}
+                seenStatus={
+                  isHandComplete || !player.holeCards
+                    ? null
+                    : player.hasSeenCards ? 'seen' : 'blind'
+                }
+                actionBadge={
+                  recentActorId === player.id && gameState.lastAction
+                    ? gameState.lastAction
+                    : null
+                }
+              />
+            ))}
 
-          <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-3 py-2">
-            <div className="absolute inset-x-2 inset-y-2 rounded-[32px] surface-panel-soft" />
-            <div className="absolute inset-x-3.5 inset-y-3.5 rounded-[28px]
-                            bg-[radial-gradient(circle_at_50%_40%,hsl(151_56%_25%)_0%,hsl(var(--felt))_42%,hsl(var(--felt-rim))_84%,hsl(154_43%_13%)_100%)]
-                            border border-bone/6
-                            shadow-[inset_0_0_48px_rgba(0,0,0,0.35)]" />
-
-            <div className="relative z-10 flex flex-col items-center gap-3 w-full">
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
+                            flex flex-col items-center gap-3">
               <PotDisplay pots={gameState.pots} />
-              <div className="surface-pill rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-brass/85">
+              <div className="surface-pill rounded-full px-3 py-1 text-[11.5px] uppercase tracking-[0.18em] text-brass/85">
                 Stake {stake.toLocaleString()}
               </div>
-              {currentPlayer.holeCards ? (
-                <div className={`flex gap-1 ${currentPlayer.isFolded ? 'opacity-40' : ''}`}>
-                  {currentPlayer.holeCards.map((card, i) => (
-                    <Card key={i} card={card} size="md" />
-                  ))}
-                </div>
-              ) : !currentPlayer.isFolded ? (
-                <div className="flex flex-col items-center gap-2">
-                  <div className="flex gap-1">
-                    {Array.from({ length: 3 }).map((_, i) => (
-                      <Card key={i} card={null} faceDown size="md" />
+            </div>
+          </div>
+
+          {!isHandComplete && (
+            <div className="px-3 pb-2">
+              <div className="surface-pill mx-auto flex max-w-xl flex-wrap items-center justify-center gap-3 rounded-[28px] px-4 py-3">
+                {currentPlayer.holeCards ? (
+                  <div className={`flex justify-center gap-2 ${currentPlayer.isFolded ? 'opacity-40' : ''}`}>
+                    {currentPlayer.holeCards.map((card, i) => (
+                      <Card key={i} card={card} size="lg" />
                     ))}
                   </div>
-                  {isMyTurn && (
-                    <Button variant="outline" size="sm" onClick={handleSee}>See cards</Button>
-                  )}
+                ) : !currentPlayer.isFolded ? (
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <Card key={i} card={null} faceDown size="lg" />
+                      ))}
+                    </div>
+                    {isMyTurn && (
+                      <Button variant="outline" size="sm" onClick={handleSee}>See</Button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex justify-center gap-2 opacity-40">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <Card key={i} card={null} faceDown size="lg" />
+                    ))}
+                  </div>
+                )}
+                <div className="rounded-full border border-bone/10 bg-panel-strong/55 px-3 py-2">
+                  <ChipStack amount={currentPlayer.chips} size="md" />
                 </div>
-              ) : (
-                <div className="flex gap-1 opacity-40">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <Card key={i} card={null} faceDown size="md" />
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <MobileSelfBar
-            currentPlayer={currentPlayer}
-            position={null}
-            isAdmin={isAdmin}
-            isMyTurn={isMyTurn}
-            chipColor={chipColor.color}
-            cardCount={3}
-          />
-        </>
-      )}
-
-      {isHandComplete ? (
-        <div className="control-rail px-3 pb-3 pt-2">
-          <div className="space-y-3 rounded-[26px] surface-panel p-3 text-center mx-auto max-w-2xl">
-            {gameState.lastAction && (
-              <div className="font-display brass-shimmer-text text-lg">
-                {gameState.lastAction.action}
+                <Badge variant={seen ? 'brass' : 'muted'} className="text-[11.5px]">
+                  {seen ? 'SEEN' : 'BLIND'} · chaal {myChaalCost.toLocaleString()}
+                </Badge>
               </div>
-            )}
-            {(() => {
-              const nextDealerId = getNextTeenPattiDealerId(gameState);
-              const nextDealer = gameState.players.find(p => p.id === nextDealerId);
-              const isMyDeal = nextDealerId === playerId;
-              return isMyDeal ? (
-                <>
-                  <VariationPicker />
-                  <Button variant="raise" size="xl" className="w-full" onClick={handleNewHand}>
-                    Deal Next Hand
-                  </Button>
-                </>
-              ) : (
-                <div className="text-bone-dim text-xs italic font-display">
-                  Waiting for {nextDealer?.name ?? 'dealer'}…
-                </div>
-              );
-            })()}
-            <div className="grid gap-2 sm:grid-cols-2">
-              {currentPlayer.holeCards && (
-                <Button
-                  variant={currentPlayer.wantsToShowCards ? 'host' : 'outline'}
-                  className="w-full"
-                  onClick={handleShowCards}
-                >
-                  {currentPlayer.wantsToShowCards ? 'Hide Cards' : 'Show Cards'}
-                </Button>
-              )}
-              <Button variant="fold" className="w-full" onClick={handleLeaveGame}>
-                Leave Game
-              </Button>
             </div>
+          )}
+
+          {isHandComplete ? HandCompleteDock(false) : <TeenPattiActionBar />}
+        </>
+      ) : isLandscape ? (
+        // ============= PHONE LANDSCAPE: 3-column grid =============
+        <>
+          {StatusStrip}
+          <div className="grid min-h-0 flex-1 grid-cols-[120px_1fr_150px] gap-1">
+            <aside className="min-h-0 overflow-hidden border-r border-brass/12">
+              <OpponentBand
+                opponents={opponents}
+                gameState={gameState}
+                currentPlayerId={playerId}
+                layout="col"
+              />
+            </aside>
+            <div className="flex min-h-0 flex-col">{TablePane}</div>
+            <aside className="flex min-h-0 flex-col border-l border-brass/12">
+              {isHandComplete ? HandCompleteDock(true) : <TeenPattiActionBar layout="vertical" />}
+            </aside>
           </div>
-        </div>
+        </>
       ) : (
-        <TeenPattiActionBar />
+        // ============= PHONE PORTRAIT: vertical stack =============
+        <>
+          {StatusStrip}
+          <OpponentBand opponents={opponents} gameState={gameState} currentPlayerId={playerId} layout="row" />
+          {TablePane}
+          {isHandComplete ? HandCompleteDock(false) : <TeenPattiActionBar />}
+        </>
       )}
 
       <AdminPanel />

@@ -16,3 +16,15 @@ export function useMediaQuery(query: string): boolean {
 
   return matches;
 }
+
+export type LayoutMode = 'desktop' | 'phone-portrait' | 'phone-landscape';
+
+// Phones in landscape are short (≤500px tall); tablets in landscape are tall enough
+// (≥600px) to use the desktop elliptical table comfortably.
+export function useLayoutMode(): LayoutMode {
+  const isDesktop = useMediaQuery('(min-width: 768px) and (min-height: 600px)');
+  const isPhoneLandscape = useMediaQuery('(orientation: landscape) and (max-height: 500px)');
+  if (isDesktop) return 'desktop';
+  if (isPhoneLandscape) return 'phone-landscape';
+  return 'phone-portrait';
+}
