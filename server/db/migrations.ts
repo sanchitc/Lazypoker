@@ -58,4 +58,26 @@ CREATE INDEX IF NOT EXISTS actions_room_time_idx ON actions (room_code, created_
 ALTER TABLE hands ADD COLUMN IF NOT EXISTS variant TEXT NOT NULL DEFAULT 'poker';
 `,
   },
+  {
+    name: '0003_admin_sessions',
+    sql: `
+CREATE TABLE IF NOT EXISTS sessions (
+  id                BIGSERIAL PRIMARY KEY,
+  socket_id         TEXT NOT NULL,
+  player_key        TEXT REFERENCES players(player_key),
+  player_id         TEXT,
+  player_name       TEXT,
+  room_code         TEXT,
+  ip                TEXT NOT NULL,
+  user_agent        TEXT,
+  connected_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  disconnected_at   TIMESTAMPTZ,
+  reconnect_count   INT NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS sessions_connected_idx ON sessions (connected_at DESC);
+CREATE INDEX IF NOT EXISTS sessions_ip_idx        ON sessions (ip);
+CREATE INDEX IF NOT EXISTS sessions_player_idx    ON sessions (player_key);
+`,
+  },
 ];

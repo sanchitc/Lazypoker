@@ -300,4 +300,62 @@ export class GameManager {
       playerId, socketId,
     }));
   }
+
+  getLiveSnapshot(): {
+    rooms: number;
+    players: number;
+    connectedPlayers: number;
+    byVariant: Record<string, number>;
+    byPhase: Record<string, number>;
+    roomList: Array<{
+      roomCode: string;
+      variant: string;
+      mode: string;
+      phase: string;
+      handNumber: number;
+      players: number;
+      connected: number;
+    }>;
+  } {
+    let players = 0;
+    let connectedPlayers = 0;
+    const byVariant: Record<string, number> = {};
+    const byPhase: Record<string, number> = {};
+    const roomList: Array<{
+      roomCode: string;
+      variant: string;
+      mode: string;
+      phase: string;
+      handNumber: number;
+      players: number;
+      connected: number;
+    }> = [];
+
+    for (const [roomCode, room] of this.rooms) {
+      const total = room.state.players.length;
+      const connected = room.state.players.filter(p => p.isConnected).length;
+      players += total;
+      connectedPlayers += connected;
+      byVariant[room.state.variant] = (byVariant[room.state.variant] ?? 0) + 1;
+      byPhase[room.state.phase] = (byPhase[room.state.phase] ?? 0) + 1;
+      roomList.push({
+        roomCode,
+        variant: room.state.variant,
+        mode: room.state.mode,
+        phase: room.state.phase,
+        handNumber: room.state.handNumber,
+        players: total,
+        connected,
+      });
+    }
+
+    return {
+      rooms: this.rooms.size,
+      players,
+      connectedPlayers,
+      byVariant,
+      byPhase,
+      roomList,
+    };
+  }
 }
