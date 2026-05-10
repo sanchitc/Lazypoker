@@ -74,6 +74,8 @@ export default function AdminScreen() {
   const [adminKey, setAdminKey] = useState<string>(() => localStorage.getItem(KEY_STORAGE) ?? '');
   const [keyInput, setKeyInput] = useState<string>('');
   const [tab, setTab] = useState<Tab>('overview');
+  const [validating, setValidating] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   const fetchAdmin = useCallback(
     async <T,>(path: string): Promise<{ ok: true; data: T } | { ok: false; status: number; error: string }> => {
@@ -91,6 +93,27 @@ export default function AdminScreen() {
     [adminKey]
   );
 
+  const tryUnlock = useCallback(async () => {
+    const key = keyInput.trim();
+    if (!key || validating) return;
+    setValidating(true);
+    setSubmitError('');
+    try {
+      const res = await fetch('/api/admin/overview', { headers: { 'x-admin-key': key } });
+      if (res.ok) {
+        localStorage.setItem(KEY_STORAGE, key);
+        setAdminKey(key);
+        return;
+      }
+      const body = await res.json().catch(() => ({}));
+      setSubmitError(body.error ?? `HTTP ${res.status}`);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'fetch failed');
+    } finally {
+      setValidating(false);
+    }
+  }, [keyInput, validating]);
+
   if (!adminKey) {
     return (
       <div className="h-full flex flex-col items-center justify-center p-6 felt-noise vignette">
@@ -103,25 +126,31 @@ export default function AdminScreen() {
                 id="admin-key"
                 type="password"
                 value={keyInput}
-                onChange={(e) => setKeyInput(e.target.value)}
+                onChange={(e) => {
+                  setKeyInput(e.target.value);
+                  if (submitError) setSubmitError('');
+                }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && keyInput.trim()) {
-                    localStorage.setItem(KEY_STORAGE, keyInput.trim());
-                    setAdminKey(keyInput.trim());
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void tryUnlock();
                   }
                 }}
                 placeholder="enter ADMIN_KEY"
+                disabled={validating}
               />
             </div>
+            {submitError && (
+              <div className="rounded-md border border-rose-600/50 bg-rose-900/20 px-3 py-2 text-sm text-rose-200">
+                {submitError}
+              </div>
+            )}
             <Button
               className="w-full"
-              disabled={!keyInput.trim()}
-              onClick={() => {
-                localStorage.setItem(KEY_STORAGE, keyInput.trim());
-                setAdminKey(keyInput.trim());
-              }}
+              disabled={!keyInput.trim() || validating}
+              onClick={() => void tryUnlock()}
             >
-              Unlock
+              {validating ? 'Unlocking…' : 'Unlock'}
             </Button>
           </CardContent>
         </Card>
