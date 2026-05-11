@@ -109,6 +109,8 @@ export default function ChipPotDisplay({ pots, gameState }: ChipPotDisplayProps)
     contextLine = 'Check or bet';
   }
 
+  if (totalPot === 0) return null;
+
   return (
     <div className="flex flex-col items-center gap-2">
       <div className={`text-[10px] font-display italic tracking-[0.22em] uppercase

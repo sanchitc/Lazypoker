@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef, useCallback } from 'react';
+import { toast } from 'sonner';
 import { GameState, GameSummary } from '@common/types';
 import { useSocket } from './SocketContext';
 
@@ -6,32 +7,25 @@ interface GameContextState {
   gameState: GameState | null;
   playerId: string | null;
   roomCode: string | null;
-  error: string | null;
   gameSummary: GameSummary | null;
 }
 
 type GameAction =
   | { type: 'SET_STATE'; state: GameState }
   | { type: 'SET_PLAYER'; playerId: string; roomCode: string }
-  | { type: 'SET_ERROR'; message: string }
-  | { type: 'CLEAR_ERROR' }
   | { type: 'SET_SUMMARY'; summary: GameSummary }
   | { type: 'RESET' };
 
 function gameReducer(state: GameContextState, action: GameAction): GameContextState {
   switch (action.type) {
     case 'SET_STATE':
-      return { ...state, gameState: action.state, error: null };
+      return { ...state, gameState: action.state };
     case 'SET_PLAYER':
       return { ...state, playerId: action.playerId, roomCode: action.roomCode };
-    case 'SET_ERROR':
-      return { ...state, error: action.message };
-    case 'CLEAR_ERROR':
-      return { ...state, error: null };
     case 'SET_SUMMARY':
       return { ...state, gameSummary: action.summary };
     case 'RESET':
-      return { gameState: null, playerId: null, roomCode: null, error: null, gameSummary: null };
+      return { gameState: null, playerId: null, roomCode: null, gameSummary: null };
     default:
       return state;
   }
@@ -48,7 +42,6 @@ const GameContext = createContext<GameContextValue>({
   gameState: null,
   playerId: null,
   roomCode: null,
-  error: null,
   gameSummary: null,
   dispatch: () => {},
   currentPlayer: null,
@@ -62,7 +55,6 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     gameState: null,
     playerId: null,
     roomCode: null,
-    error: null,
     gameSummary: null,
   });
 
@@ -74,7 +66,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     };
 
     const handleError = (data: { message: string }) => {
-      dispatch({ type: 'SET_ERROR', message: data.message });
+      toast.error(data.message);
     };
 
     const handleGameEnded = (data: { summary: GameSummary }) => {

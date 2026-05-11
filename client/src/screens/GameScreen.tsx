@@ -628,20 +628,15 @@ function FullModeLayout() {
                 {gameState.lastAction.action}
               </div>
             )}
-            {(() => {
-              const nextDealerId = getNextTeenPattiDealerId(gameState);
-              const nextDealer = gameState.players.find(p => p.id === nextDealerId);
-              const isMyDeal = nextDealerId === playerId;
-              return isMyDeal ? (
-                <Button variant="raise" size="xl" className="w-full" onClick={handleNewHand}>
-                  Deal Next Hand
-                </Button>
-              ) : (
-                <div className="text-bone-dim text-xs italic font-display">
-                  Waiting for {nextDealer?.name ?? 'dealer'}…
-                </div>
-              );
-            })()}
+            {isAdmin ? (
+              <Button variant="raise" size="xl" className="w-full" onClick={handleNewHand}>
+                Deal Next Hand
+              </Button>
+            ) : (
+              <div className="text-bone-dim text-xs italic font-display">
+                Waiting for host to deal…
+              </div>
+            )}
             <div className="grid gap-2 sm:grid-cols-2">
               {currentPlayer.holeCards && (
                 <Button
@@ -996,6 +991,25 @@ function TeenPattiLayout() {
     }
   }, [gameState?.pendingSideshow, gameState?.lastAction, gameState?.players, playerId]);
 
+  // Variation-change toast. Fires for all players (including the host) whenever
+  // nextHandVariation changes after initial mount, so everyone knows what's coming.
+  const prevVariationRef = useRef<string | undefined>(undefined);
+  const isFirstVariationRender = useRef(true);
+  useEffect(() => {
+    const next = gameState?.nextHandVariation;
+    if (isFirstVariationRender.current) {
+      // Capture the initial value silently — don't toast on mount.
+      prevVariationRef.current = next;
+      isFirstVariationRender.current = false;
+      return;
+    }
+    if (next !== undefined && next !== prevVariationRef.current) {
+      prevVariationRef.current = next;
+      const label = TEEN_PATTI_VARIATIONS[next as keyof typeof TEEN_PATTI_VARIATIONS]?.label ?? next;
+      toast.info(`Game type changed to ${label}`);
+    }
+  }, [gameState?.nextHandVariation]);
+
   if (!gameState || !playerId || !roomCode || !currentPlayer) return null;
 
   const handleNewHand = () => {
@@ -1174,6 +1188,10 @@ function TeenPattiLayout() {
             ))}
           </div>
         )}
+
+        <div className="rounded-full border border-bone/10 bg-panel-strong/55 px-3 py-1">
+          <ChipStack amount={currentPlayer.chips} size="sm" />
+        </div>
 
         {!isHandComplete && actionLogText && (
           <div className="surface-pill rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.16em] text-bone-dim">

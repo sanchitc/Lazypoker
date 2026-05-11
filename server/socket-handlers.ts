@@ -141,18 +141,26 @@ export function setupSocketHandlers(
       const prevState = gameManager.getRoomState(data.roomCode);
       const state = gameManager.processAction(data.roomCode, data.playerId, data.action);
       if (state) {
-        broadcastState(data.roomCode);
+        // The engine returns the same state reference when it rejects an action
+        // (e.g. non-admin calling START_HAND). Only broadcast when state actually
+        // changed so stale/unauthorised clients cannot trigger redundant updates.
+        if (state !== prevState) {
+          broadcastState(data.roomCode);
 
-        // Only END_GAME ends the game session — and only if the engine actually
-        // accepted it (admin-gated). Comparing references catches refused actions:
-        // the engine returns the same state object when it rejects.
-        if (data.action.type === 'END_GAME' && prevState !== state) {
-          const summary = gameManager.getGameSummary(data.roomCode);
-          if (summary) {
-            io.to(data.roomCode).emit('game:ended', { summary });
-            // Clean up room so stale sessions can't reconnect
-            gameManager.deleteRoom(data.roomCode);
+          // Only END_GAME ends the game session — and only if the engine actually
+          // accepted it (admin-gated).
+          if (data.action.type === 'END_GAME') {
+            const summary = gameManager.getGameSummary(data.roomCode);
+            if (summary) {
+              io.to(data.roomCode).emit('game:ended', { summary });
+              // Clean up room so stale sessions can't reconnect
+              gameManager.deleteRoom(data.roomCode);
+            }
           }
+        } else {
+          // Action was silently rejected by the engine — inform the caller so
+          // their UI can recover instead of hanging at the current phase.
+          socket.emit('error', { message: 'Action not permitted' });
         }
       } else {
         socket.emit('error', { message: 'Invalid action' });
